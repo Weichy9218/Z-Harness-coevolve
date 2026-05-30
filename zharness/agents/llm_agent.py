@@ -31,6 +31,7 @@ class MiniLangLLMAgent:
         api_key_env: Optional[str] = None,
         base_url_env: Optional[str] = None,
         reasoning_effort: Optional[str] = None,
+        extra_body: Optional[Dict[str, object]] = None,
     ) -> None:
         client_args = {
             "model": model,
@@ -43,16 +44,31 @@ class MiniLangLLMAgent:
             client_args["base_url_env"] = base_url_env
         if reasoning_effort:
             client_args["reasoning_effort"] = reasoning_effort
+        if extra_body:
+            client_args["extra_body"] = extra_body
 
         self.client = instantiate_llm_client(
             client_name,
             client_args,
         )
 
-    async def solve(self, episode: Episode, condition: str) -> AgentRun:
+    async def solve(
+        self,
+        episode: Episode,
+        condition: str,
+        *,
+        override_rulebook: str | None = None,
+    ) -> AgentRun:
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_prompt(episode, condition)},
+            {
+                "role": "user",
+                "content": build_user_prompt(
+                    episode,
+                    condition,
+                    override_rulebook=override_rulebook,
+                ),
+            },
         ]
         response = await self.client.chat(messages)
         return AgentRun(

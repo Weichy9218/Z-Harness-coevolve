@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Sequence
+from typing import Dict, List, Sequence, Union
 
-from .generator import Meaning, Task, World, normalized_command
+from .generator import HardWorld, Meaning, Task, World, normalized_command
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,11 @@ class VerificationResult:
         }
 
 
-def verify_answers(world: World, tasks: Sequence[Task], answers: Sequence[Dict[str, object]]) -> VerificationResult:
+def verify_answers(
+    world: Union[World, HardWorld],
+    tasks: Sequence[Task],
+    answers: Sequence[Dict[str, object]],
+) -> VerificationResult:
     by_id = {str(answer.get("task_id", "")): answer for answer in answers if isinstance(answer, dict)}
     results: List[TaskResult] = []
 
@@ -91,4 +95,3 @@ def _accuracy_for_kind(results: Sequence[TaskResult], kind: str) -> float:
     if not subset:
         return 0.0
     return sum(result.correct for result in subset) / len(subset)
-

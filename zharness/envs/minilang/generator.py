@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import random
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 
 ACTIONS = ("jump", "walk", "spin", "lift")
@@ -218,7 +218,7 @@ class HardWorld:
 @dataclass(frozen=True)
 class Episode:
     episode_id: str
-    world: World
+    world: Union[World, HardWorld]
     examples: List[Example]
     tasks: List[Task]
 
@@ -296,12 +296,12 @@ def diagnostic_meanings(rng: random.Random) -> List[Meaning]:
     return meanings
 
 
-def support_examples(world: World, rng: random.Random, budget: int) -> List[Example]:
+def support_examples(world: Union[World, HardWorld], rng: random.Random, budget: int) -> List[Example]:
     meanings = diagnostic_meanings(rng)
     return [world.example(meaning) for meaning in meanings[:budget]]
 
 
-def make_tasks(world: World, rng: random.Random, parse_count: int, generate_count: int) -> List[Task]:
+def make_tasks(world: Union[World, HardWorld], rng: random.Random, parse_count: int, generate_count: int) -> List[Task]:
     tasks: List[Task] = []
     for idx in range(parse_count):
         meaning = random_meaning(rng)
@@ -356,7 +356,7 @@ def normalized_command(value: object) -> str:
     return " ".join(str(value or "").strip().split())
 
 
-def all_expected_answers(world: World, tasks: Sequence[Task]) -> List[Dict[str, object]]:
+def all_expected_answers(world: Union[World, HardWorld], tasks: Sequence[Task]) -> List[Dict[str, object]]:
     answers: List[Dict[str, object]] = []
     for task in tasks:
         if task.kind == "parse" and task.meaning is not None:

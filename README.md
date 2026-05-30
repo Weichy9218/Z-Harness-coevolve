@@ -66,3 +66,18 @@ tests/                       # deterministic tests
 This repo intentionally starts smaller than a full co-evolve system. The first milestone is a reproducible MiniLang scaffold-headroom result with API calls only. LoRA/GRPO, MiniAPI, AppWorld, and Terminal-Bench are v1+ after the measurement protocol is stable.
 
 See [docs/MODEL_AND_ENV_REVISIONS.md](docs/MODEL_AND_ENV_REVISIONS.md) for why the original GPT/basic MiniLang run is only a smoke test and why hard-mode DeepSeek is the current default.
+
+For Qwen through apihy, disable visible thinking:
+
+```bash
+python -m zharness.eval.run_headroom \
+  --episodes 1 \
+  --difficulty hard \
+  --client openrouter_newapi \
+  --model qwen3.5-27b \
+  --api-key-env apihy_API_KEY_qwen \
+  --base-url-env apihy_BASE_URL \
+  --extra-body-json '{"enable_thinking": false}'
+```
+
+Day 2 leakage results are summarized in [docs/DAY2_LEAKAGE_RESULT.md](docs/DAY2_LEAKAGE_RESULT.md).

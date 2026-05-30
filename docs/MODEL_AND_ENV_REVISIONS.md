@@ -41,6 +41,9 @@ Observed:
 - `qwen3.6-27b` answers short smoke prompts and hard-mode `k_spec`, but hard
   no-scaffold requests can hang for minutes on the current route. Use it for
   targeted cells until route latency is diagnosed.
+- `qwen3.5-27b` is usable only after disabling visible thinking with
+  `--extra-body-json '{"enable_thinking": false}'`. Without that, it spends the
+  completion budget on visible reasoning and may never emit final JSON.
 
 ## Environment Change
 
@@ -90,4 +93,3 @@ Interpretation:
 3. Current `K_gen` is not an effective scaffold; it is neutral or harmful.
 4. The next valid `K_gen` must be executable/interactive: query selection,
    verifier calls, counterexample construction, and repair, not only prose.
-

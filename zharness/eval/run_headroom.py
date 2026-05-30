@@ -17,6 +17,7 @@ from zharness.agents.llm_agent import MiniLangLLMAgent, mock_agent_run
 from zharness.agents.prompts import CONDITIONS, parse_conditions
 from zharness.envs.minilang.generator import make_episode
 from zharness.envs.minilang.verifier import verify_answers
+from zharness.eval.cli_utils import parse_extra_body_json
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -41,6 +42,7 @@ async def run_experiment(args: argparse.Namespace) -> Dict[str, object]:
             api_key_env=args.api_key_env,
             base_url_env=args.base_url_env,
             reasoning_effort=args.reasoning_effort,
+            extra_body=parse_extra_body_json(args.extra_body_json),
         )
 
     records: List[Dict[str, object]] = []
@@ -188,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-key-env", default=None)
     parser.add_argument("--base-url-env", default=None)
     parser.add_argument("--reasoning-effort", default=None)
+    parser.add_argument("--extra-body-json", default=None)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=2048)
     parser.add_argument("--max-retries", type=int, default=1)

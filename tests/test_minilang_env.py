@@ -39,3 +39,15 @@ def test_counterfactual_transforms_change_expected_surface_form() -> None:
 
     assert renamed.encode(meaning) != episode.world.encode(meaning)
     assert swapped.encode(meaning) != episode.world.encode(meaning)
+
+
+def test_hard_counterfactual_transforms_change_expected_surface_form() -> None:
+    episode = make_episode(7, support_budget=8, parse_tasks=1, generate_tasks=1, difficulty="hard")
+    meaning = episode.tasks[0].meaning
+    assert meaning is not None
+
+    renamed = renamed_vocab_world(episode.world, random.Random(11))
+    swapped = order_swap_world(episode.world)
+
+    assert renamed.encode(meaning) != episode.world.encode(meaning)
+    assert swapped.encode(meaning) != episode.world.encode(meaning)

@@ -25,15 +25,43 @@ def _extract_json_payload(text: str) -> str | None:
     candidate = str(text or "").strip()
     if not candidate:
         return None
+    if "</think>" in candidate:
+        candidate = candidate.rsplit("</think>", 1)[-1].strip()
     if candidate.startswith("```"):
         candidate = re.sub(r"^```(?:json)?", "", candidate, flags=re.IGNORECASE).strip()
         candidate = re.sub(r"```$", "", candidate).strip()
     if candidate.startswith("{") and candidate.endswith("}"):
         return candidate
 
-    start = candidate.find("{")
-    end = candidate.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return None
-    return candidate[start : end + 1]
+    return _last_balanced_json_object(candidate)
 
+
+def _last_balanced_json_object(text: str) -> str | None:
+    end = text.rfind("}")
+    if end == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(end, -1, -1):
+        char = text[index]
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and in_string:
+            escaped = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "}":
+            depth += 1
+            continue
+        if char == "{":
+            depth -= 1
+            if depth == 0:
+                return text[index : end + 1]
+    return None

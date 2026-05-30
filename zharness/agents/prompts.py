@@ -32,10 +32,11 @@ K_GEN_PLAYBOOK = """General MiniLang discovery playbook:
 
 SYSTEM_PROMPT = """You solve synthetic hidden-rule language tasks.
 Return only valid JSON. Do not include markdown or explanations.
+If your runtime emits thinking text anyway, put the final JSON object after all thinking; the last JSON object must match the requested schema.
 """
 
 
-def build_user_prompt(episode: Episode, condition: str) -> str:
+def build_user_prompt(episode: Episode, condition: str, override_rulebook: str | None = None) -> str:
     if condition not in CONDITIONS:
         raise ValueError(f"unknown condition: {condition}")
 
@@ -46,7 +47,9 @@ def build_user_prompt(episode: Episode, condition: str) -> str:
         *[f"- {example.to_prompt()}" for example in episode.examples],
     ]
 
-    if condition in {CONDITION_K_SPEC, CONDITION_K_SPEC_K_GEN}:
+    if override_rulebook is not None:
+        sections.extend(["", override_rulebook])
+    elif condition in {CONDITION_K_SPEC, CONDITION_K_SPEC_K_GEN}:
         sections.extend(["", episode.world.rulebook_text()])
 
     if condition in {CONDITION_K_GEN, CONDITION_K_SPEC_K_GEN}:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -22,6 +23,7 @@ async def main_async() -> None:
     parser.add_argument("--api-key-env", default=None)
     parser.add_argument("--base-url-env", default=None)
     parser.add_argument("--reasoning-effort", default=None)
+    parser.add_argument("--extra-body-json", default=None)
     parser.add_argument("--prompt", default="Return exactly: API_OK")
     parser.add_argument("--max-tokens", type=int, default=64)
     args = parser.parse_args()
@@ -38,6 +40,8 @@ async def main_async() -> None:
         client_args["base_url_env"] = args.base_url_env
     if args.reasoning_effort:
         client_args["reasoning_effort"] = args.reasoning_effort
+    if args.extra_body_json:
+        client_args["extra_body"] = json.loads(args.extra_body_json)
     client = instantiate_llm_client(args.client, client_args)
     try:
         response = await client.chat([{"role": "user", "content": args.prompt}])
