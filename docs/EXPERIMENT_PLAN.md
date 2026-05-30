@@ -1,8 +1,16 @@
 # 论文实验规划：Quarantined Skill Adoption
 
+## 文档分工
+
+本文件是唯一的 paper-facing 实验主计划，包含 research questions、实验协议、指标、kill conditions 和 daily checkpoint。不要在别处再维护一份平行日程。
+
+- [docs/MODEL_AND_ENV_REVISIONS.md](MODEL_AND_ENV_REVISIONS.md)：只记录模型路由、API quirks、环境修改原则和可复用命令。
+- [docs/result/](result/)：只放 daily factual results、run artifacts、表格和当日解释。
+- [docs/RELATED_EXPERIMENTS.md](RELATED_EXPERIMENTS.md)：只放外部工作和可借鉴 protocol。
+
 ## 目标
 
-不是先证明一个完整 co-evolve 大系统，而是先用便宜、可控、可验证的环境回答三个问题：
+不要先证明完整 co-evolve 大系统，而是用便宜、可控、可验证的 API-only 环境回答三个问题：
 
 1. **Scaffold headroom**：scaffold / skill 是否真的降低 learning cost。
 2. **Trace abstraction**：stripped trace 是否比 raw trace 更少泄漏、更能迁移。
@@ -69,6 +77,7 @@ Stripped trace 保留：
 
 - seen family
 - renamed vocab
+- morphology/agreement swap
 - order/rule swap
 - held-out grammar family
 - no-specific-harness
@@ -129,6 +138,30 @@ Process metrics 借 Harness-Bench：
 - consistency
 - forbidden action rate
 - token/tool/verifier cost
+
+## Daily Checkpoints
+
+原 weekly 路线压缩成 daily checkpoint。每一天都要有可运行 artifact，不允许只写故事。模型/环境命令不在这里重复维护；以 `README.md` 和 `docs/MODEL_AND_ENV_REVISIONS.md` 为准。
+
+| Day | 目标 | Done when | 当前状态 |
+| --- | --- | --- | --- |
+| Day 1 | MiniLang scaffold headroom | generator/verifier 可重复；`run_headroom` 能跑四个 scaffold 条件；hard-mode DeepSeek 至少 8 episode；保存 JSONL records 和 summary | 已完成；见 [docs/result/DAY1_RESULT.md](result/DAY1_RESULT.md) |
+| Day 2 | Counterfactual leakage eval | `run_leakage` 比较 source raw rulebook vs target scaffold；覆盖 `renamed_vocab` 和 `order_swap`；生成 parse/generate 分拆表；Qwen route 可用 | 已完成；见 [docs/result/DAY2_LEAKAGE_RESULT.md](result/DAY2_LEAKAGE_RESULT.md) |
+| Day 3 | Stronger leakage transforms | 加 `composition_swap` 或 `agreement_swap`；加入 held-out grammar family split；输出 per-transform parse/generate/cost table | 下一步 |
+| Day 4 | Raw / stripped trace dataset | 每个 successful episode 输出 raw、stripped、artifact-scrubbed trace；scrubber 自动拒绝 token mapping、rulebook snippet、答案、family-id | 待做 |
+| Day 5 | API-only distillation proxy | 用 raw / stripped / scrubbed trace 作为 in-context memory；在 seen、renamed、rule_swap、held-out、no-specific-harness 上比较 | 待做 |
+| Day 6 | Offline adoption signal | 构造 useful K_gen、leaking K_spec、description trap、redundant skill library；跑 removal ablation；算 adoption score vs removal delta | 待做 |
+| Day 7 | MiniAPI v0 | 500 行以内 simulator；支持 hidden API constraints 和 deterministic verifier；复用 headroom / leakage / adoption 三套协议 | 待做 |
+| Day 8 | First paper-facing result pack | 一张 scaffold headroom 表；一张 leakage transform 表；一张 adoption-vs-removal 图或表；一页 kill-condition 结论 | 待做 |
+
+Server phase gate：只有 Day 3-8 通过后，才上 8xA100。训练细节和 verl / SFT 配置放在 [docs/TRAINING_PLAN.md](TRAINING_PLAN.md)；本文件只保留进入训练的 scientific gate。
+
+训练前必须满足：
+
+1. Stripped trace dataset 通过 leakage scan。
+2. Offline adoption 有 removal correlation。
+3. Eval splits 固定且 manifest 可复现。
+4. SFT / verl configs 只消费 scrubbed manifest。
 
 ## Later Validation
 

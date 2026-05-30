@@ -1,6 +1,8 @@
 # Day 2 Result: Counterfactual Leakage Eval
 
-## Qwen Route Diagnosis
+This file is a factual daily result archive. Protocol and future schedule live in `../EXPERIMENT_PLAN.md`; durable model/environment decisions live in `../MODEL_AND_ENV_REVISIONS.md`.
+
+## Qwen Route Observation
 
 `qwen3.5-27b` is reachable through apihy, but the route defaults to visible
 thinking output. Small `max_tokens` values fail because the model spends the
@@ -35,6 +37,8 @@ This returns `API_OK` in 20 total tokens. Experiment runners now support
 ```bash
 --extra-body-json '{"enable_thinking": false}'
 ```
+
+The durable Qwen command pattern is maintained in `../MODEL_AND_ENV_REVISIONS.md`.
 
 Qwen hard-mode smoke after disabling thinking:
 
@@ -87,4 +91,3 @@ Seeds: 7-14. Difficulty: hard. Support examples: 8.
    (`count_position`, `color_position`, agreement marker mapping) without only
    renaming the vocabulary. That should test whether models learn the structural
    rule, not just token semantics.
-
