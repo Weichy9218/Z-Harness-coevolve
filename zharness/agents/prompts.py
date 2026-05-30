@@ -22,8 +22,10 @@ CONDITIONS = (
 K_GEN_PLAYBOOK = """General MiniLang discovery playbook:
 - Treat each example as evidence about latent slots, not as a phrase to memorize.
 - Compare minimally different examples to isolate action, object, color, count, and negation.
-- Infer which token disappears when neg=false before inferring word order.
-- For generation, apply the inferred slot order exactly and omit neg when neg=false.
+- Check whether meanings are encoded as separate words, affixes, hyphenated morphemes, or agreement markers.
+- Infer which token or morpheme disappears when neg=false before inferring word order.
+- Test whether word order is conditional on negation or another feature.
+- For generation, apply the inferred morphology and slot order exactly.
 - Before answering, check every generated command against the same latent slot inventory.
 """
 
@@ -72,4 +74,3 @@ def parse_conditions(raw: str) -> Iterable[str]:
             known = ", ".join(CONDITIONS)
             raise ValueError(f"unknown condition '{condition}'. Known: {known}")
         yield condition
-

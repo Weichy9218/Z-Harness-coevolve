@@ -29,9 +29,15 @@ Initial insight:
 3. K_gen playbook is too weak or too redundant with the examples; Day 2 should make active queries / verifier calls explicit instead of only prompt advice.
 4. API gateway can occasionally return empty content; the runner now retries each cell once by default.
 
+Revision after model/environment critique:
+
+- Treat this table as infrastructure validation only.
+- Do not use GPT-family models for the main v0 sweeps.
+- Use `--difficulty hard` and apihy `deepseek-v3.2` as the current daily sweep default.
+- See `docs/MODEL_AND_ENV_REVISIONS.md` for the hard-mode result.
+
 Next discriminating check:
 
 - Add counterfactual transforms: `renamed_vocab`, `order_swap`, and later hidden rule permutation.
 - Compare source raw rulebook vs target scaffold under those transforms.
 - If raw source remains strong after renaming, the task leaks; if it collapses and target scaffold recovers, the measurement protocol is useful.
-

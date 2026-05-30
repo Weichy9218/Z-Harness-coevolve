@@ -28,14 +28,25 @@ class MiniLangLLMAgent:
         model: str,
         temperature: float = 0.0,
         max_tokens: int = 2048,
+        api_key_env: Optional[str] = None,
+        base_url_env: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> None:
+        client_args = {
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if api_key_env:
+            client_args["api_key_env"] = api_key_env
+        if base_url_env:
+            client_args["base_url_env"] = base_url_env
+        if reasoning_effort:
+            client_args["reasoning_effort"] = reasoning_effort
+
         self.client = instantiate_llm_client(
             client_name,
-            {
-                "model": model,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            },
+            client_args,
         )
 
     async def solve(self, episode: Episode, condition: str) -> AgentRun:
@@ -68,4 +79,3 @@ def mock_agent_run(episode: Episode, *, policy: Optional[str]) -> AgentRun:
         usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
         model=f"mock:{policy}",
     )
-

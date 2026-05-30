@@ -22,7 +22,7 @@
 
 ## Experiment A：MiniLang Scaffold Headroom
 
-环境：随机生成词表、word order、negation token、action/object/color/count 组合规则。每个 episode 给少量 labeled examples，模型完成 parse 和 generate 两类任务。
+环境：随机生成 alien surface form、word order、negation token、action/object/color/count 组合规则。默认用 `--difficulty hard`：对象短语由 color/object/count marker 组成 hyphenated morphology，动作短语带 count agreement，negation 会改变 word order。每个 episode 给少量 labeled examples，模型完成 parse 和 generate 两类任务。
 
 条件：
 
@@ -140,4 +140,3 @@ Process metrics 借 Harness-Bench：
 4. Terminal-Bench 2 only as secondary validation
 
 Hanabi -> Terminal-Bench 2 只适合后期 headline transfer，不适合 v0。
-

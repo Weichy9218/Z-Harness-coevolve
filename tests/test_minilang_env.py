@@ -16,6 +16,13 @@ def test_oracle_answers_verify_perfectly() -> None:
     assert result.generate_accuracy == 1.0
 
 
+def test_hard_oracle_answers_verify_perfectly() -> None:
+    episode = make_episode(7, support_budget=8, parse_tasks=3, generate_tasks=3, difficulty="hard")
+    answers = all_expected_answers(episode.world, episode.tasks)
+    result = verify_answers(episode.world, episode.tasks, answers)
+    assert result.accuracy == 1.0
+
+
 def test_empty_answers_fail() -> None:
     episode = make_episode(7, support_budget=12, parse_tasks=3, generate_tasks=3)
     result = verify_answers(episode.world, episode.tasks, [])
@@ -32,4 +39,3 @@ def test_counterfactual_transforms_change_expected_surface_form() -> None:
 
     assert renamed.encode(meaning) != episode.world.encode(meaning)
     assert swapped.encode(meaning) != episode.world.encode(meaning)
-

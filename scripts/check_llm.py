@@ -19,19 +19,26 @@ async def main_async() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--client", default="gpt_sub2api")
     parser.add_argument("--model", default="gpt-5.4")
+    parser.add_argument("--api-key-env", default=None)
+    parser.add_argument("--base-url-env", default=None)
+    parser.add_argument("--reasoning-effort", default=None)
     parser.add_argument("--prompt", default="Return exactly: API_OK")
     parser.add_argument("--max-tokens", type=int, default=64)
     args = parser.parse_args()
 
     load_dotenv(REPO_ROOT / ".env", override=False)
-    client = instantiate_llm_client(
-        args.client,
-        {
-            "model": args.model,
-            "temperature": 0.0,
-            "max_tokens": args.max_tokens,
-        },
-    )
+    client_args = {
+        "model": args.model,
+        "temperature": 0.0,
+        "max_tokens": args.max_tokens,
+    }
+    if args.api_key_env:
+        client_args["api_key_env"] = args.api_key_env
+    if args.base_url_env:
+        client_args["base_url_env"] = args.base_url_env
+    if args.reasoning_effort:
+        client_args["reasoning_effort"] = args.reasoning_effort
+    client = instantiate_llm_client(args.client, client_args)
     try:
         response = await client.chat([{"role": "user", "content": args.prompt}])
         print(response.content.strip())
@@ -46,4 +53,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -38,6 +38,9 @@ async def run_experiment(args: argparse.Namespace) -> Dict[str, object]:
             model=args.model,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
+            api_key_env=args.api_key_env,
+            base_url_env=args.base_url_env,
+            reasoning_effort=args.reasoning_effort,
         )
 
     records: List[Dict[str, object]] = []
@@ -49,6 +52,7 @@ async def run_experiment(args: argparse.Namespace) -> Dict[str, object]:
                 support_budget=args.support_budget,
                 parse_tasks=args.parse_tasks,
                 generate_tasks=args.generate_tasks,
+                difficulty=args.difficulty,
             )
             for condition in conditions:
                 record = await _run_one_condition(
@@ -177,9 +181,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--support-budget", type=int, default=12)
     parser.add_argument("--parse-tasks", type=int, default=4)
     parser.add_argument("--generate-tasks", type=int, default=4)
+    parser.add_argument("--difficulty", choices=("basic", "hard"), default="basic")
     parser.add_argument("--conditions", default=",".join(CONDITIONS))
     parser.add_argument("--client", default="gpt_sub2api")
     parser.add_argument("--model", default="gpt-5.4")
+    parser.add_argument("--api-key-env", default=None)
+    parser.add_argument("--base-url-env", default=None)
+    parser.add_argument("--reasoning-effort", default=None)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=2048)
     parser.add_argument("--max-retries", type=int, default=1)

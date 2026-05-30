@@ -44,6 +44,7 @@ VOCAB = (
     "mora",
     "lafi",
 )
+AFFIXES = ("ka", "tu", "mi", "lo", "sha", "vek", "rin", "om")
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,76 @@ class World:
 
 
 @dataclass(frozen=True)
+class HardWorld:
+    """A harder AlienGlyph-style world with morphology and conditional order."""
+
+    family_id: str
+    concept_to_stem: Dict[str, str]
+    count_to_marker: Dict[int, str]
+    agreement_by_count: Dict[int, str]
+    neg_token: str
+    affirmative_order: Tuple[str, str]
+    negative_order: Tuple[str, str]
+    color_position: str
+    count_position: str
+
+    def encode(self, meaning: Meaning) -> str:
+        object_phrase = self._object_phrase(meaning)
+        action_phrase = self._action_phrase(meaning)
+        order = self.negative_order if meaning.neg else self.affirmative_order
+        phrases = {
+            "object": object_phrase,
+            "action": action_phrase,
+        }
+        pieces = [phrases[item] for item in order]
+        if meaning.neg:
+            pieces.insert(0, self.neg_token)
+        return " ".join(pieces)
+
+    def example(self, meaning: Meaning) -> Example:
+        return Example(command=self.encode(meaning), meaning=meaning)
+
+    def rulebook_text(self) -> str:
+        lines = [
+            "Current MiniLang hard-mode rulebook:",
+            "- A command has one object phrase and one action phrase.",
+            f"- affirmative_order: {' '.join(self.affirmative_order)}",
+            f"- negative_order_after_neg_token: {' '.join(self.negative_order)}",
+            f"- neg_token: {self.neg_token}; omit it when neg=false",
+            f"- color_position_in_object_phrase: {self.color_position}",
+            f"- count_marker_position_in_object_phrase: {self.count_position}",
+            "- object phrase morphology uses hyphens and exactly these morphemes:",
+        ]
+        for obj in sorted(OBJECTS):
+            lines.append(f"  - object:{obj} -> {self.concept_to_stem[f'object:{obj}']}")
+        for color in sorted(COLORS):
+            lines.append(f"  - color:{color} -> {self.concept_to_stem[f'color:{color}']}")
+        for count in sorted(COUNTS):
+            lines.append(f"  - count:{count} -> {self.count_to_marker[count]}")
+        lines.append("- action phrase morphology is action-stem + agreement marker:")
+        for action in sorted(ACTIONS):
+            lines.append(f"  - action:{action} -> {self.concept_to_stem[f'action:{action}']}")
+        for count in sorted(COUNTS):
+            lines.append(f"  - agreement for count:{count} -> {self.agreement_by_count[count]}")
+        return "\n".join(lines)
+
+    def _object_phrase(self, meaning: Meaning) -> str:
+        color = self.concept_to_stem[f"color:{meaning.color}"]
+        obj = self.concept_to_stem[f"object:{meaning.object}"]
+        count = self.count_to_marker[meaning.count]
+
+        core = [color, obj] if self.color_position == "prefix" else [obj, color]
+        if self.count_position == "prefix":
+            return "-".join([count] + core)
+        return "-".join(core + [count])
+
+    def _action_phrase(self, meaning: Meaning) -> str:
+        action = self.concept_to_stem[f"action:{meaning.action}"]
+        agreement = self.agreement_by_count[meaning.count]
+        return f"{action}-{agreement}"
+
+
+@dataclass(frozen=True)
 class Episode:
     episode_id: str
     world: World
@@ -167,6 +238,35 @@ def make_world(rng: random.Random, family_id: str, *, order: Optional[Tuple[str,
         family_id=family_id,
         concept_to_token={concept: token for concept, token in zip(concepts, tokens)},
         order=order,
+    )
+
+
+def make_hard_world(rng: random.Random, family_id: str) -> HardWorld:
+    concepts = [f"action:{value}" for value in ACTIONS]
+    concepts += [f"object:{value}" for value in OBJECTS]
+    concepts += [f"color:{value}" for value in COLORS]
+
+    stems = list(VOCAB)
+    rng.shuffle(stems)
+    markers = list(AFFIXES)
+    rng.shuffle(markers)
+
+    count_markers = markers[: len(COUNTS)]
+    agreement_markers = markers[len(COUNTS) : len(COUNTS) * 2]
+    neg_token = markers[-1]
+    affirmative_order = rng.choice((("object", "action"), ("action", "object")))
+    negative_order = tuple(reversed(affirmative_order))
+
+    return HardWorld(
+        family_id=f"{family_id}-hard",
+        concept_to_stem={concept: stem for concept, stem in zip(concepts, stems)},
+        count_to_marker={count: marker for count, marker in zip(COUNTS, count_markers)},
+        agreement_by_count={count: marker for count, marker in zip(COUNTS, agreement_markers)},
+        neg_token=neg_token,
+        affirmative_order=affirmative_order,
+        negative_order=negative_order,
+        color_position=rng.choice(("prefix", "suffix")),
+        count_position=rng.choice(("prefix", "suffix")),
     )
 
 
@@ -233,9 +333,15 @@ def make_episode(
     support_budget: int = 12,
     parse_tasks: int = 4,
     generate_tasks: int = 4,
+    difficulty: str = "basic",
 ) -> Episode:
     rng = random.Random(seed)
-    world = make_world(rng, family_id=f"family-{seed}")
+    if difficulty == "basic":
+        world = make_world(rng, family_id=f"family-{seed}")
+    elif difficulty == "hard":
+        world = make_hard_world(rng, family_id=f"family-{seed}")
+    else:
+        raise ValueError(f"unknown MiniLang difficulty: {difficulty}")
     examples = support_examples(world, random.Random(seed + 10_000), support_budget)
     tasks = make_tasks(world, random.Random(seed + 20_000), parse_tasks, generate_tasks)
     return Episode(
@@ -258,4 +364,3 @@ def all_expected_answers(world: World, tasks: Sequence[Task]) -> List[Dict[str, 
         elif task.kind == "generate" and task.meaning is not None:
             answers.append({"task_id": task.task_id, "command": world.encode(task.meaning)})
     return answers
-

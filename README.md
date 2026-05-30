@@ -31,13 +31,18 @@ python -m zharness.eval.run_headroom --episodes 2 --mock-policy oracle
 python scripts/check_llm.py --client gpt_sub2api --model gpt-5.4
 ```
 
-跑第一批 API scaffold headroom：
+跑第一批 API scaffold headroom。主 sweep 不再默认用 GPT；当前建议用 apihy DeepSeek hard mode：
 
 ```bash
 python -m zharness.eval.run_headroom \
   --episodes 8 \
-  --client gpt_sub2api \
-  --model gpt-5.4 \
+  --difficulty hard \
+  --support-budget 8 \
+  --client openrouter_newapi \
+  --model deepseek-v3.2 \
+  --api-key-env apihy_API_KEY_deepseek \
+  --base-url-env apihy_BASE_URL \
+  --reasoning-effort none \
   --conditions no_scaffold,k_spec,k_gen,k_spec_k_gen
 ```
 
@@ -60,3 +65,4 @@ tests/                       # deterministic tests
 
 This repo intentionally starts smaller than a full co-evolve system. The first milestone is a reproducible MiniLang scaffold-headroom result with API calls only. LoRA/GRPO, MiniAPI, AppWorld, and Terminal-Bench are v1+ after the measurement protocol is stable.
 
+See [docs/MODEL_AND_ENV_REVISIONS.md](docs/MODEL_AND_ENV_REVISIONS.md) for why the original GPT/basic MiniLang run is only a smoke test and why hard-mode DeepSeek is the current default.
