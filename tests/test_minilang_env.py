@@ -1,8 +1,9 @@
 """Deterministic tests for MiniLang generation and verification."""
 
 from zharness.envs.minilang.generator import all_expected_answers, make_episode
-from zharness.envs.minilang.transforms import order_swap_world, renamed_vocab_world
+from zharness.envs.minilang.transforms import composition_swap_world, order_swap_world, renamed_vocab_world
 from zharness.envs.minilang.verifier import verify_answers
+from zharness.eval.trace_memory import build_trace_text, scan_trace_for_leakage
 
 import random
 
@@ -36,9 +37,11 @@ def test_counterfactual_transforms_change_expected_surface_form() -> None:
 
     renamed = renamed_vocab_world(episode.world, random.Random(11))
     swapped = order_swap_world(episode.world)
+    composition_swapped = composition_swap_world(episode.world)
 
     assert renamed.encode(meaning) != episode.world.encode(meaning)
     assert swapped.encode(meaning) != episode.world.encode(meaning)
+    assert composition_swapped.encode(meaning) != episode.world.encode(meaning)
 
 
 def test_hard_counterfactual_transforms_change_expected_surface_form() -> None:
@@ -48,6 +51,20 @@ def test_hard_counterfactual_transforms_change_expected_surface_form() -> None:
 
     renamed = renamed_vocab_world(episode.world, random.Random(11))
     swapped = order_swap_world(episode.world)
+    composition_swapped = composition_swap_world(episode.world)
 
     assert renamed.encode(meaning) != episode.world.encode(meaning)
     assert swapped.encode(meaning) != episode.world.encode(meaning)
+    assert composition_swapped.encode(meaning) != episode.world.encode(meaning)
+
+
+def test_trace_scrubber_separates_raw_from_scrubbed() -> None:
+    episode = make_episode(7, support_budget=8, parse_tasks=1, generate_tasks=1, difficulty="hard")
+
+    raw_scan = scan_trace_for_leakage(episode, build_trace_text(episode, "raw"))
+    stripped_scan = scan_trace_for_leakage(episode, build_trace_text(episode, "stripped"))
+    scrubbed_scan = scan_trace_for_leakage(episode, build_trace_text(episode, "artifact_scrubbed"))
+
+    assert not raw_scan["passed"]
+    assert stripped_scan["passed"]
+    assert scrubbed_scan["passed"]

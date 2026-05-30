@@ -1,6 +1,6 @@
 """Tests for robust extraction of model answer JSON."""
 
-from zharness.agents.answer_parser import parse_answer_json
+from zharness.agents.answer_parser import parse_answer_json, parse_answer_payload
 
 
 def test_parse_plain_json_answers() -> None:
@@ -34,3 +34,11 @@ The examples contain {"not": "the final answer"}.
             },
         }
     ]
+
+
+def test_parse_payload_preserves_called_skill_ids() -> None:
+    payload = parse_answer_payload(
+        '{"called_skill_ids":["kg_minimal_contrast"],"answers":[{"task_id":"p0"}]}'
+    )
+    assert payload["called_skill_ids"] == ["kg_minimal_contrast"]
+    assert payload["answers"] == [{"task_id": "p0"}]

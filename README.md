@@ -22,6 +22,8 @@ MiniLang hard mode 已经有 scaffold headroom，Day 2 leakage smoke 也支持�
 
 - [Day 1 scaffold headroom](docs/result/DAY1_RESULT.md)
 - [Day 2 leakage eval](docs/result/DAY2_LEAKAGE_RESULT.md)
+- [Day 3 stronger leakage transforms](docs/result/DAY3_LEAKAGE_RESULT.md)
+- [Day 4-6 API-only trace/proxy/adoption report](docs/result/DAY4_DAY6_API_REPORT.md)
 - [Model and environment notes](docs/MODEL_AND_ENV_REVISIONS.md)
 
 ## Quick Start
@@ -79,7 +81,7 @@ python -m zharness.eval.run_leakage \
   --api-key-env apihy_API_KEY_deepseek \
   --base-url-env apihy_BASE_URL \
   --reasoning-effort none \
-  --transforms renamed_vocab,order_swap
+  --transforms renamed_vocab,order_swap,composition_swap,heldout_family
 ```
 
 Qwen through apihy needs visible thinking disabled:

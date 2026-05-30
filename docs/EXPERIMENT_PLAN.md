@@ -147,10 +147,10 @@ Process metrics 借 Harness-Bench：
 | --- | --- | --- | --- |
 | Day 1 | MiniLang scaffold headroom | generator/verifier 可重复；`run_headroom` 能跑四个 scaffold 条件；hard-mode DeepSeek 至少 8 episode；保存 JSONL records 和 summary | 已完成；见 [docs/result/DAY1_RESULT.md](result/DAY1_RESULT.md) |
 | Day 2 | Counterfactual leakage eval | `run_leakage` 比较 source raw rulebook vs target scaffold；覆盖 `renamed_vocab` 和 `order_swap`；生成 parse/generate 分拆表；Qwen route 可用 | 已完成；见 [docs/result/DAY2_LEAKAGE_RESULT.md](result/DAY2_LEAKAGE_RESULT.md) |
-| Day 3 | Stronger leakage transforms | 加 `composition_swap` 或 `agreement_swap`；加入 held-out grammar family split；输出 per-transform parse/generate/cost table | 下一步 |
-| Day 4 | Raw / stripped trace dataset | 每个 successful episode 输出 raw、stripped、artifact-scrubbed trace；scrubber 自动拒绝 token mapping、rulebook snippet、答案、family-id | 待做 |
-| Day 5 | API-only distillation proxy | 用 raw / stripped / scrubbed trace 作为 in-context memory；在 seen、renamed、rule_swap、held-out、no-specific-harness 上比较 | 待做 |
-| Day 6 | Offline adoption signal | 构造 useful K_gen、leaking K_spec、description trap、redundant skill library；跑 removal ablation；算 adoption score vs removal delta | 待做 |
+| Day 3 | Stronger leakage transforms | 加 `composition_swap`；加入 `heldout_family` split；输出 per-transform parse/generate/token/error table | 已完成；见 [docs/result/DAY3_LEAKAGE_RESULT.md](result/DAY3_LEAKAGE_RESULT.md) |
+| Day 4 | Raw / stripped trace dataset | 每个 successful episode 输出 raw、stripped、artifact-scrubbed trace；scrubber 自动拒绝 token mapping、rulebook snippet、答案、family-id | 已完成；见 [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md) |
+| Day 5 | API-only distillation proxy | 用 raw / stripped / scrubbed trace 作为 in-context memory；在 seen、renamed、rule_swap、held-out、no-specific-harness 上比较 | 已完成；见 [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md) |
+| Day 6 | Offline adoption signal | 构造 useful K_gen、leaking K_spec、description trap、redundant skill library；跑 removal ablation；算 adoption score vs removal delta | 已完成；见 [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md) |
 | Day 7 | MiniAPI v0 | 500 行以内 simulator；支持 hidden API constraints 和 deterministic verifier；复用 headroom / leakage / adoption 三套协议 | 待做 |
 | Day 8 | First paper-facing result pack | 一张 scaffold headroom 表；一张 leakage transform 表；一张 adoption-vs-removal 图或表；一页 kill-condition 结论 | 待做 |
 

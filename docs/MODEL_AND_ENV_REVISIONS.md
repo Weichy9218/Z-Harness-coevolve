@@ -96,9 +96,19 @@ Lingojam-style alien translators are useful as inspiration, but not as the bench
 - word order changes under negation;
 - generation requires exact surface form, not just semantic parsing.
 
-The next environment revision should add a structural counterfactual transform, either `morphology_swap` or `agreement_swap`, because current `order_swap` mostly exposes generation errors while semantic parse can remain high.
+Day 3 added `composition_swap` and `heldout_family` to `run_leakage`.
+
+- `composition_swap` keeps surface stems and count markers, but flips object
+  phrase composition positions and rotates count agreement. It is a structural
+  generation leakage test: source raw parse can remain high because token
+  semantics are unchanged, but source raw generation should collapse.
+- `heldout_family` creates a new hard MiniLang family with independent
+  vocabulary, morphology, and order. It is the broadest no-training check before
+  trace distillation.
 
 ## Result Pointers
 
 - Day 1 scaffold headroom and hard-mode DeepSeek table: [docs/result/DAY1_RESULT.md](result/DAY1_RESULT.md)
 - Day 2 leakage eval and Qwen route observation: [docs/result/DAY2_LEAKAGE_RESULT.md](result/DAY2_LEAKAGE_RESULT.md)
+- Day 3 stronger leakage transforms and expectation gap analysis: [docs/result/DAY3_LEAKAGE_RESULT.md](result/DAY3_LEAKAGE_RESULT.md)
+- Day 4-6 API-only trace, proxy, and adoption report: [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md)

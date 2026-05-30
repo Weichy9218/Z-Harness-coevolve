@@ -8,17 +8,24 @@ from typing import Dict, List
 
 
 def parse_answer_json(text: str) -> List[Dict[str, object]]:
-    payload = _extract_json_payload(text)
-    if payload is None:
-        return []
-    try:
-        data = json.loads(payload)
-    except json.JSONDecodeError:
-        return []
+    data = parse_answer_payload(text)
     answers = data.get("answers") if isinstance(data, dict) else None
     if not isinstance(answers, list):
         return []
     return [answer for answer in answers if isinstance(answer, dict)]
+
+
+def parse_answer_payload(text: str) -> Dict[str, object]:
+    payload = _extract_json_payload(text)
+    if payload is None:
+        return {}
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
 
 
 def _extract_json_payload(text: str) -> str | None:

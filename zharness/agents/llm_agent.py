@@ -78,6 +78,19 @@ class MiniLangLLMAgent:
             model=response.model or getattr(self.client, "model", ""),
         )
 
+    async def solve_prompt(self, user_prompt: str) -> AgentRun:
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+        response = await self.client.chat(messages)
+        return AgentRun(
+            answers=parse_answer_json(response.content),
+            raw_response=response.content,
+            usage=response.usage,
+            model=response.model or getattr(self.client, "model", ""),
+        )
+
     async def aclose(self) -> None:
         await self.client.aclose()
 

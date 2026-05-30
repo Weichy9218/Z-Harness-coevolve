@@ -49,6 +49,30 @@ def order_swap_world(source: MiniLangWorld) -> MiniLangWorld:
     raise RuntimeError("no alternative order is available")
 
 
+def composition_swap_world(source: MiniLangWorld) -> MiniLangWorld:
+    if isinstance(source, HardWorld):
+        return HardWorld(
+            family_id=f"{source.family_id}-composition-swap",
+            concept_to_stem=dict(source.concept_to_stem),
+            count_to_marker=dict(source.count_to_marker),
+            agreement_by_count=_rotated_count_mapping(source.agreement_by_count),
+            neg_token=source.neg_token,
+            affirmative_order=source.affirmative_order,
+            negative_order=source.negative_order,
+            color_position=_flipped_position(source.color_position),
+            count_position=_flipped_position(source.count_position),
+        )
+
+    for order in reversed(ORDERS):
+        if order != source.order:
+            return World(
+                family_id=f"{source.family_id}-composition-swap",
+                concept_to_token=dict(source.concept_to_token),
+                order=order,
+            )
+    raise RuntimeError("no alternative composition is available")
+
+
 def _renamed_hard_world(source: HardWorld, rng: random.Random) -> HardWorld:
     stems = list(VOCAB)
     rng.shuffle(stems)
@@ -71,3 +95,18 @@ def _renamed_hard_world(source: HardWorld, rng: random.Random) -> HardWorld:
         color_position=source.color_position,
         count_position=source.count_position,
     )
+
+
+def _flipped_position(position: str) -> str:
+    if position == "prefix":
+        return "suffix"
+    if position == "suffix":
+        return "prefix"
+    raise ValueError(f"unknown position: {position}")
+
+
+def _rotated_count_mapping(mapping: dict[int, str]) -> dict[int, str]:
+    return {
+        count: mapping[COUNTS[(index + 1) % len(COUNTS)]]
+        for index, count in enumerate(COUNTS)
+    }
