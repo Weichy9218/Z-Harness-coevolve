@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Local secrets copied from galaxy-selfevolve for API calls.
+.env
+
+# Experiment outputs.
+runs/
+data/
+artifacts/
+*.jsonl
