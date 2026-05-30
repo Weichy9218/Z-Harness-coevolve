@@ -286,12 +286,14 @@ def diagnostic_meanings(rng: random.Random) -> List[Meaning]:
     base_color = rng.choice(COLORS)
     base_count = rng.choice(COUNTS)
 
-    meanings: List[Meaning] = []
-    meanings.extend(Meaning(action, base_object, base_color, base_count) for action in ACTIONS)
-    meanings.extend(Meaning(base_action, obj, base_color, base_count) for obj in OBJECTS)
-    meanings.extend(Meaning(base_action, base_object, color, base_count) for color in COLORS)
-    meanings.extend(Meaning(base_action, base_object, base_color, count) for count in COUNTS)
-    meanings.append(Meaning(base_action, base_object, base_color, base_count, neg=True))
+    candidates: List[Meaning] = []
+    candidates.extend(Meaning(action, base_object, base_color, base_count) for action in ACTIONS)
+    candidates.extend(Meaning(base_action, obj, base_color, base_count) for obj in OBJECTS)
+    candidates.extend(Meaning(base_action, base_object, color, base_count) for color in COLORS)
+    candidates.extend(Meaning(base_action, base_object, base_color, count) for count in COUNTS)
+    candidates.append(Meaning(base_action, base_object, base_color, base_count, neg=True))
+
+    meanings = list(dict.fromkeys(candidates))
     rng.shuffle(meanings)
     return meanings
 

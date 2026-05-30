@@ -24,6 +24,7 @@ MiniLang hard mode 已经有 scaffold headroom，Day 2 leakage smoke 也支持�
 - [Day 2 leakage eval](docs/result/DAY2_LEAKAGE_RESULT.md)
 - [Day 3 stronger leakage transforms](docs/result/DAY3_LEAKAGE_RESULT.md)
 - [Day 4-6 API-only trace/proxy/adoption report](docs/result/DAY4_DAY6_API_REPORT.md)
+- [Executable K_gen headroom repair](docs/result/KGEN_EXEC_HEADROOM_RESULT.md)
 - [Model and environment notes](docs/MODEL_AND_ENV_REVISIONS.md)
 
 ## Quick Start

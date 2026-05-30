@@ -151,10 +151,11 @@ Process metrics 借 Harness-Bench：
 | Day 4 | Raw / stripped trace dataset | 每个 successful episode 输出 raw、stripped、artifact-scrubbed trace；scrubber 自动拒绝 token mapping、rulebook snippet、答案、family-id | 已完成；见 [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md) |
 | Day 5 | API-only distillation proxy | 用 raw / stripped / scrubbed trace 作为 in-context memory；在 seen、renamed、rule_swap、held-out、no-specific-harness 上比较 | 已完成；见 [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md) |
 | Day 6 | Offline adoption signal | 构造 useful K_gen、leaking K_spec、description trap、redundant skill library；跑 removal ablation；算 adoption score vs removal delta | 已完成；见 [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md) |
-| Day 7 | MiniAPI v0 | 500 行以内 simulator；支持 hidden API constraints 和 deterministic verifier；复用 headroom / leakage / adoption 三套协议 | 待做 |
-| Day 8 | First paper-facing result pack | 一张 scaffold headroom 表；一张 leakage transform 表；一张 adoption-vs-removal 图或表；一页 kill-condition 结论 | 待做 |
+| Day 7 | Executable K_gen repair | `k_gen_exec` 支持 bounded diagnostic probes；summary 记录 query/verifier cost；与 prose `k_gen` 小规模复跑比较 | 已完成；见 [docs/result/KGEN_EXEC_HEADROOM_RESULT.md](result/KGEN_EXEC_HEADROOM_RESULT.md) |
+| Day 8 | MiniAPI v0 | 500 行以内 simulator；支持 hidden API constraints 和 deterministic verifier；复用 headroom / leakage / adoption 三套协议 | 待做 |
+| Day 9 | First paper-facing result pack | 一张 scaffold headroom 表；一张 leakage transform 表；一张 adoption-vs-removal 图或表；一页 kill-condition 结论 | 待做 |
 
-Server phase gate：只有 Day 3-8 通过后，才上 8xA100。训练细节和 verl / SFT 配置放在 [docs/TRAINING_PLAN.md](TRAINING_PLAN.md)；本文件只保留进入训练的 scientific gate。
+Server phase gate：只有 Day 3-9 通过后，才上 8xA100。训练细节和 verl / SFT 配置放在 [docs/TRAINING_PLAN.md](TRAINING_PLAN.md)；本文件只保留进入训练的 scientific gate。
 
 训练前必须满足：
 

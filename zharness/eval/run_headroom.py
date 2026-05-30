@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
 from zharness.agents.llm_agent import MiniLangLLMAgent, mock_agent_run
-from zharness.agents.prompts import CONDITIONS, parse_conditions
+from zharness.agents.prompts import CONDITIONS, parse_conditions, scaffold_costs_for_condition
 from zharness.envs.minilang.generator import make_episode
 from zharness.envs.minilang.verifier import verify_answers
 from zharness.eval.cli_utils import parse_extra_body_json
@@ -113,11 +113,13 @@ async def _run_one_condition(
 
     verification = verify_answers(episode.world, episode.tasks, agent_run.answers)
     metrics = verification.to_metrics()
+    scaffold_costs = scaffold_costs_for_condition(episode, condition)
     return {
         "episode_id": episode.episode_id,
         "family_id": episode.world.family_id,
         "condition": condition,
         "metrics": metrics,
+        "scaffold_costs": scaffold_costs,
         "usage": agent_run.usage,
         "model": agent_run.model,
         "error": " | ".join(errors) if errors else None,
@@ -140,6 +142,16 @@ def _summarize(records: List[Dict[str, object]]) -> Dict[str, Dict[str, float]]:
             "accuracy": mean(metric["accuracy"] for metric in metrics),
             "parse_accuracy": mean(metric["parse_accuracy"] for metric in metrics),
             "generate_accuracy": mean(metric["generate_accuracy"] for metric in metrics),
+            "query_calls": sum(
+                int(record.get("scaffold_costs", {}).get("query_calls", 0) or 0)
+                for record in records
+                if record["condition"] == condition
+            ),
+            "verifier_calls": sum(
+                int(record.get("scaffold_costs", {}).get("verifier_calls", 0) or 0)
+                for record in records
+                if record["condition"] == condition
+            ),
             "total_tokens": sum(
                 int(record.get("usage", {}).get("total_tokens", 0) or 0)
                 for record in records
@@ -168,11 +180,14 @@ def _append_jsonl(path: Path, record: Dict[str, object]) -> None:
 def _print_record(record: Dict[str, object]) -> None:
     metrics = record["metrics"]
     error_marker = " ERROR" if record.get("error") else ""
+    scaffold_costs = record.get("scaffold_costs", {})
     print(
         f"{record['episode_id']} {record['condition']:<13s} "
         f"acc={metrics['accuracy']:.3f} "
         f"parse={metrics['parse_accuracy']:.3f} "
-        f"gen={metrics['generate_accuracy']:.3f}{error_marker}"
+        f"gen={metrics['generate_accuracy']:.3f} "
+        f"q={int(scaffold_costs.get('query_calls', 0) or 0)} "
+        f"v={int(scaffold_costs.get('verifier_calls', 0) or 0)}{error_marker}"
     )
 
 
