@@ -145,8 +145,13 @@ Current status:
 
 - MiniAPI simulator, memory proxy, and robust adoption smokes are now runnable
   without GPU.
-- The remaining no-GPU engineering gate is a shared manifest validator that
-  marks rows as trainable only when leakage scan passes and robust adoption is
-  `promote_candidate`.
+- The shared manifest validator marks rows as trainable only when leakage scan
+  passes and robust adoption is `promote_candidate`.
+- HarnessX has been cloned and smoke-tested locally; see
+  `docs/result/HARNESSX_LOCAL_REPRO_SMOKE.md`.
+- Local HarnessX GAIA-style smoke verifies the runner and trajectory filesystem.
+  Full reported GAIA gains still need real task data, more API budget, and a
+  meta-agent that reliably writes candidate `config.yaml`; model evolution
+  still requires GPU.
 
 GPU phase starts only after these gates are met and documented in `docs/result/`.

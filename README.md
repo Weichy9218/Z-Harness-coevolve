@@ -29,6 +29,7 @@ MiniLang hard mode 已经有 scaffold headroom，Day 2 leakage smoke 也支持�
 - [MiniAPI / ToolWorld smoke](docs/result/DAY10_MINIAPI_SMOKE.md)
 - [MiniAPI memory/adoption smoke](docs/result/DAY10_MINIAPI_MEMORY_ADOPTION.md)
 - [No-GPU training manifest gate](docs/result/NOGPU_TRAINING_MANIFEST_GATE.md)
+- [HarnessX local reproduction smoke](docs/result/HARNESSX_LOCAL_REPRO_SMOKE.md)
 - [Model and environment notes](docs/MODEL_AND_ENV_REVISIONS.md)
 
 ## Quick Start
