@@ -27,6 +27,7 @@ MiniLang hard mode 已经有 scaffold headroom，Day 2 leakage smoke 也支持�
 - [Executable K_gen headroom repair](docs/result/KGEN_EXEC_HEADROOM_RESULT.md)
 - [Interactive K_gen smoke](docs/result/DAY8_INTERACTIVE_KGEN_SMOKE.md)
 - [MiniAPI / ToolWorld smoke](docs/result/DAY10_MINIAPI_SMOKE.md)
+- [MiniAPI memory/adoption smoke](docs/result/DAY10_MINIAPI_MEMORY_ADOPTION.md)
 - [Model and environment notes](docs/MODEL_AND_ENV_REVISIONS.md)
 
 ## Quick Start
@@ -107,6 +108,8 @@ MiniAPI / ToolWorld no-GPU smoke：
 
 ```bash
 python -m zharness.eval.run_miniapi --episodes 4 --seed 31
+python -m zharness.eval.run_miniapi_memory_proxy --episodes 4 --seed 31
+python -m zharness.eval.run_miniapi_adoption --episodes 4 --seed 31
 ```
 
 ## Documentation Map

@@ -141,4 +141,12 @@ No-GPU phase is done when:
 - Trainable manifests are still blocked unless scrubbed memory transfers on
   heldout/counterfactual splits.
 
+Current status:
+
+- MiniAPI simulator, memory proxy, and robust adoption smokes are now runnable
+  without GPU.
+- The remaining no-GPU engineering gate is a shared manifest validator that
+  marks rows as trainable only when leakage scan passes and robust adoption is
+  `promote_candidate`.
+
 GPU phase starts only after these gates are met and documented in `docs/result/`.
