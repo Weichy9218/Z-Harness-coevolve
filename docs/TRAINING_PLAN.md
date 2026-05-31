@@ -16,7 +16,8 @@
 2. `renamed_vocab`、composition/rule swap、held-out family 能区分 source raw memory 和 target scaffold。
 3. raw / stripped / artifact-scrubbed trace dataset 生成稳定。
 4. scrubber 能自动拒绝 surface token mapping、当前 rulebook、答案、family-id leakage。
-5. Offline adoption score 与 counterfactual removal delta 有可解释相关性。
+5. Interactive/action traces 能稳定生成，且 `action_stripped` / `artifact_scrubbed_action` 强于 prose stripped trace 或提供更清楚的 heldout learning-cost signal。
+6. Offline adoption score 与 counterfactual removal delta 有可解释相关性；robust adoption gate 不会 promotion seen-only K_spec。
 
 不满足这些 gate 时，上 SFT/GRPO 只会把泄漏写进 adapter。
 
@@ -30,10 +31,10 @@
   "base_model": "Qwen-or-DeepSeek-family",
   "env": "MiniLangHard",
   "split": "train|seen_eval|renamed_vocab|rule_swap|heldout_family|no_specific_harness",
-  "trace_variant": "raw|stripped|artifact_scrubbed|reward_rollout",
+  "trace_variant": "raw|stripped|executable_stripped|artifact_scrubbed|artifact_scrubbed_executable|raw_action|action_stripped|artifact_scrubbed_action|reward_rollout",
   "episode_id": "episode-7",
   "family_id": "family-7-hard",
-  "scaffold_condition": "no_scaffold|k_spec|k_gen|k_spec_k_gen",
+  "scaffold_condition": "no_scaffold|k_spec|k_gen|k_gen_exec|k_gen_interactive|k_spec_k_gen",
   "skill_calls": [],
   "prompt": [],
   "response": "",
@@ -63,6 +64,8 @@ Arms：
 | Raw SFT LoRA | raw successful traces | leakage control |
 | Stripped SFT LoRA | stripped traces | 主实验 |
 | Artifact-scrubbed SFT LoRA | stricter stripped traces | leakage-safe arm |
+| Action-stripped SFT LoRA | stripped interactive action traces | 主实验候选，训练 query/verify/repair policy |
+| Artifact-scrubbed action SFT LoRA | strict action traces | 最安全的 training candidate |
 | Raw SFT + no-specific eval | raw traces, eval removes K_spec | 测 memorization 依赖 |
 
 SFT success pattern：
@@ -139,6 +142,7 @@ Promotion rule：
 - Harness artifact promotion requires positive removal delta and no counterfactual leakage。
 - Weight adapter promotion requires Internalization Gain > 0 and Leakage Susceptibility not worse than base/control。
 - Any artifact with seen-only gains is quarantined, even if adoption is high。
+- Interactive trace promotion requires no direct target-query violations and bounded query/verifier cost。
 
 ## Reporting
 

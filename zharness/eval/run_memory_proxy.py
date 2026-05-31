@@ -245,7 +245,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--generate-tasks", type=int, default=4)
     parser.add_argument("--difficulty", choices=("basic", "hard"), default="hard")
     parser.add_argument("--transforms", default="renamed_vocab,composition_swap,heldout_family")
-    parser.add_argument("--memory-variants", default="none,raw,stripped,artifact_scrubbed")
+    parser.add_argument(
+        "--memory-variants",
+        default="none,raw,stripped,executable_stripped,artifact_scrubbed,artifact_scrubbed_executable",
+    )
     parser.add_argument("--client", default="openrouter_newapi")
     parser.add_argument("--model", default="deepseek-v3.2")
     parser.add_argument("--api-key-env", default="apihy_API_KEY_deepseek")

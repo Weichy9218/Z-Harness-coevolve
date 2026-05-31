@@ -7,6 +7,7 @@
 - [docs/MODEL_AND_ENV_REVISIONS.md](MODEL_AND_ENV_REVISIONS.md)：只记录模型路由、API quirks、环境修改原则和可复用命令。
 - [docs/result/](result/)：只放 daily factual results、run artifacts、表格和当日解释。
 - [docs/RELATED_EXPERIMENTS.md](RELATED_EXPERIMENTS.md)：只放外部工作和可借鉴 protocol。
+- [docs/KGEN_INTERACTIVE_PROTOCOL.md](KGEN_INTERACTIVE_PROTOCOL.md)：定义 `k_gen_interactive`、action trace、robust adoption gate。
 
 ## 目标
 
@@ -39,19 +40,23 @@
 | `no_scaffold` | 只有 examples 和 tasks | 基线 |
 | `k_spec` | 当前 rulebook：词表和 word order | 测 task-specific scaffold 上限 |
 | `k_gen` | 通用 discovery playbook | 测 general scaffold 是否可用 |
+| `k_gen_exec` | harness 预先给 bounded diagnostic probes | 测可执行证据 scaffold 是否强于 prose |
+| `k_gen_interactive` | 模型在预算内执行 hypothesis/query/verify/repair/audit | 测 general learning procedure 是否能降低 learning cost |
 | `k_spec_k_gen` | 两者都给 | 测 scaffold 上限 |
 
 指标：
 
 - success / parse accuracy / generation accuracy
-- token usage
+- token usage / query calls / verifier calls / repair count / final attempts
 - task-level failure cases
-- 后续加入 attempts-to-success、query calls、verifier calls
+- direct target query violations
 
 Kill conditions：
 
 - `k_spec` 不显著强于 `no_scaffold`：任务或 prompt 设计失败。
 - `k_gen` 没有 learning-cost 收益：playbook 太空，模型用不上。
+- `k_gen_interactive` 接近 `k_spec` 且 query/verifier 证据过宽：protocol 泄漏了 K_spec。
+- `k_gen_interactive` 不强于 `k_gen_exec`：交互动作没有提供真实 repair 机制，或 verifier feedback 太弱。
 - parse/generate 不拆开时结论变化：aggregate metric 不可信。
 
 ## Experiment B：Raw Trace vs Stripped Trace
@@ -72,6 +77,19 @@ Stripped trace 保留：
 - verifier feedback use
 - repair pattern
 - answer checking procedure
+
+Memory proxy 当前实现的安全 variants：
+
+- `stripped`：prose 版 strategy memory。
+- `executable_stripped`：保留 hypothesis/query/verifier/repair/audit action protocol，删除 surface artifacts。
+- `artifact_scrubbed`：只保留 abstract reusable policy。
+- `artifact_scrubbed_executable`：只保留 action policy、quarantine rule 和 promotion gate。
+
+交互版 trace 额外拆成：
+
+- `raw_action`：保留当前 commands、feedback、final answers，只作 leakage control。
+- `action_stripped`：保留 action sequence、reason、feedback category、repair pattern，删除 surface artifacts。
+- `artifact_scrubbed_action`：只保留动作类型、stop criteria 和 quarantine policy，用作严格训练候选。
 
 评测：
 
@@ -116,6 +134,7 @@ Kill conditions：
 
 - adoption score 与 removal delta 的 Spearman correlation。
 - high-adoption 但 counterfactual 崩的 skill 判为 K_spec，不允许蒸馏。
+- promotion 使用 robust adoption gate：counterfactual / heldout removal delta 必须在容差内非负；seen-only positive skill 只能归入 ephemeral K_spec。
 
 ## Experiment D：MiniAPI / ToolWorld
 
@@ -152,15 +171,17 @@ Process metrics 借 Harness-Bench：
 | Day 5 | API-only distillation proxy | 用 raw / stripped / scrubbed trace 作为 in-context memory；在 seen、renamed、rule_swap、held-out、no-specific-harness 上比较 | 已完成；见 [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md) |
 | Day 6 | Offline adoption signal | 构造 useful K_gen、leaking K_spec、description trap、redundant skill library；跑 removal ablation；算 adoption score vs removal delta | 已完成；见 [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md) |
 | Day 7 | Executable K_gen repair | `k_gen_exec` 支持 bounded diagnostic probes；summary 记录 query/verifier cost；与 prose `k_gen` 小规模复跑比较 | 已完成；见 [docs/result/KGEN_EXEC_HEADROOM_RESULT.md](result/KGEN_EXEC_HEADROOM_RESULT.md) |
-| Day 8 | MiniAPI v0 | 500 行以内 simulator；支持 hidden API constraints 和 deterministic verifier；复用 headroom / leakage / adoption 三套协议 | 待做 |
-| Day 9 | First paper-facing result pack | 一张 scaffold headroom 表；一张 leakage transform 表；一张 adoption-vs-removal 图或表；一页 kill-condition 结论 | 待做 |
+| Day 8 | Interactive K_gen | `k_gen_interactive` 支持 bounded hypothesis/query/verify/repair/audit；records 保存 action trace、query/verifier/repair/final-attempt cost；与 `k_gen_exec` 和 `k_spec` 复跑 headroom | 8-episode headroom 已完成；lean repair 有效但较贵，见 [docs/result/DAY8_INTERACTIVE_KGEN_SMOKE.md](result/DAY8_INTERACTIVE_KGEN_SMOKE.md) |
+| Day 9 | Action trace proxy + robust adoption | memory proxy 增加 `raw_action`、`action_stripped`、`artifact_scrubbed_action`；adoption report 同时报 naive adoption 和 robust classification | 2-episode smoke 已完成；safe memory 尚未迁移，robust adoption 已 quarantine source rulebook，见 [docs/result/DAY8_INTERACTIVE_KGEN_SMOKE.md](result/DAY8_INTERACTIVE_KGEN_SMOKE.md) |
+| Day 10 | MiniAPI v0 | 500 行以内 simulator；支持 hidden API constraints 和 deterministic verifier；复用 headroom / leakage / adoption 三套协议 | 待做 |
+| Day 11 | First paper-facing result pack | 一张 scaffold headroom 表；一张 leakage transform 表；一张 adoption-vs-removal 图或表；一页 kill-condition 结论 | 待做 |
 
-Server phase gate：只有 Day 3-9 通过后，才上 8xA100。训练细节和 verl / SFT 配置放在 [docs/TRAINING_PLAN.md](TRAINING_PLAN.md)；本文件只保留进入训练的 scientific gate。
+MiniLang server phase gate：只有 Day 3-9 通过后，才考虑上 8xA100 做 MiniLang SFT / GRPO。MiniAPI 是后续 agentic validation，不是启动 MiniLang training 的前置条件。训练细节和 verl / SFT 配置放在 [docs/TRAINING_PLAN.md](TRAINING_PLAN.md)；本文件只保留进入训练的 scientific gate。
 
 训练前必须满足：
 
 1. Stripped trace dataset 通过 leakage scan。
-2. Offline adoption 有 removal correlation。
+2. Offline adoption 有 removal correlation，并且 robust adoption 不会 promotion K_spec。
 3. Eval splits 固定且 manifest 可复现。
 4. SFT / verl configs 只消费 scrubbed manifest。
 

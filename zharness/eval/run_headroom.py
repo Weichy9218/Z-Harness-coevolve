@@ -14,10 +14,16 @@ from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
 from zharness.agents.llm_agent import MiniLangLLMAgent, mock_agent_run
-from zharness.agents.prompts import CONDITIONS, parse_conditions, scaffold_costs_for_condition
+from zharness.agents.prompts import (
+    CONDITIONS,
+    CONDITION_K_GEN_INTERACTIVE,
+    parse_conditions,
+    scaffold_costs_for_condition,
+)
 from zharness.envs.minilang.generator import make_episode
 from zharness.envs.minilang.verifier import verify_answers
 from zharness.eval.cli_utils import parse_extra_body_json
+from zharness.eval.interactive_kgen import run_interactive_k_gen
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -96,10 +102,22 @@ async def _run_one_condition(
 ) -> Dict[str, object]:
     errors: List[str] = []
     agent_run = None
+    action_trace = None
+    scaffold_costs = scaffold_costs_for_condition(episode, condition)
     if mock_policy is not None:
         agent_run = mock_agent_run(episode, policy=mock_policy)
     elif agent is None:
         errors.append("ValueError('agent is not initialized')")
+    elif condition == CONDITION_K_GEN_INTERACTIVE:
+        interactive_run = await run_interactive_k_gen(
+            episode=episode,
+            agent=agent,
+            max_retries=max_retries,
+        )
+        agent_run = interactive_run.agent_run
+        action_trace = interactive_run.action_trace
+        scaffold_costs = interactive_run.scaffold_costs
+        errors.extend(interactive_run.errors)
     else:
         for _attempt in range(max_retries + 1):
             try:
@@ -113,8 +131,7 @@ async def _run_one_condition(
 
     verification = verify_answers(episode.world, episode.tasks, agent_run.answers)
     metrics = verification.to_metrics()
-    scaffold_costs = scaffold_costs_for_condition(episode, condition)
-    return {
+    record = {
         "episode_id": episode.episode_id,
         "family_id": episode.world.family_id,
         "condition": condition,
@@ -128,6 +145,9 @@ async def _run_one_condition(
         "raw_response": agent_run.raw_response,
         "task_results": [asdict(result) for result in verification.task_results],
     }
+    if action_trace is not None:
+        record["action_trace"] = action_trace
+    return record
 
 
 def _summarize(records: List[Dict[str, object]]) -> Dict[str, Dict[str, float]]:
@@ -149,6 +169,26 @@ def _summarize(records: List[Dict[str, object]]) -> Dict[str, Dict[str, float]]:
             ),
             "verifier_calls": sum(
                 int(record.get("scaffold_costs", {}).get("verifier_calls", 0) or 0)
+                for record in records
+                if record["condition"] == condition
+            ),
+            "repair_count": sum(
+                int(record.get("scaffold_costs", {}).get("repair_count", 0) or 0)
+                for record in records
+                if record["condition"] == condition
+            ),
+            "final_attempts": sum(
+                int(record.get("scaffold_costs", {}).get("final_attempts", 0) or 0)
+                for record in records
+                if record["condition"] == condition
+            ),
+            "direct_target_query_violations": sum(
+                int(record.get("scaffold_costs", {}).get("direct_target_query_violations", 0) or 0)
+                for record in records
+                if record["condition"] == condition
+            ),
+            "no_regression_merges": sum(
+                int(record.get("scaffold_costs", {}).get("no_regression_merges", 0) or 0)
                 for record in records
                 if record["condition"] == condition
             ),
@@ -187,7 +227,9 @@ def _print_record(record: Dict[str, object]) -> None:
         f"parse={metrics['parse_accuracy']:.3f} "
         f"gen={metrics['generate_accuracy']:.3f} "
         f"q={int(scaffold_costs.get('query_calls', 0) or 0)} "
-        f"v={int(scaffold_costs.get('verifier_calls', 0) or 0)}{error_marker}"
+        f"v={int(scaffold_costs.get('verifier_calls', 0) or 0)} "
+        f"r={int(scaffold_costs.get('repair_count', 0) or 0)} "
+        f"m={int(scaffold_costs.get('no_regression_merges', 0) or 0)}{error_marker}"
     )
 
 

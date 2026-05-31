@@ -8,7 +8,13 @@ from typing import Dict, List, Sequence
 from zharness.envs.minilang.generator import Episode, HardWorld, World, all_expected_answers, normalized_command
 
 
-TRACE_VARIANTS = ("raw", "stripped", "artifact_scrubbed")
+TRACE_VARIANTS = (
+    "raw",
+    "stripped",
+    "executable_stripped",
+    "artifact_scrubbed",
+    "artifact_scrubbed_executable",
+)
 
 
 def build_trace_text(episode: Episode, variant: str) -> str:
@@ -16,8 +22,12 @@ def build_trace_text(episode: Episode, variant: str) -> str:
         return _build_raw_trace(episode)
     if variant == "stripped":
         return _build_stripped_trace()
+    if variant == "executable_stripped":
+        return _build_executable_stripped_trace()
     if variant == "artifact_scrubbed":
         return _build_artifact_scrubbed_trace()
+    if variant == "artifact_scrubbed_executable":
+        return _build_artifact_scrubbed_executable_trace()
     raise ValueError(f"unknown trace variant: {variant}")
 
 
@@ -100,6 +110,22 @@ def _build_stripped_trace() -> str:
     )
 
 
+def _build_executable_stripped_trace() -> str:
+    return "\n".join(
+        [
+            "EXECUTABLE-STRIPPED TRACE TEMPLATE FROM A PREVIOUS MINILANG EPISODE.",
+            "Reusable action sequence:",
+            "1. propose a compact hypothesis over latent slots and unknowns.",
+            "2. request bounded diagnostic examples that change one factor at a time.",
+            "3. convert each observation into morpheme-level evidence, not memorized words.",
+            "4. draft answers only after action, object, color, count, and negation have evidence.",
+            "5. ask verifier for coarse labels, then repair the smallest failing slot rule.",
+            "6. preserve answers already marked correct and audit generation forms for all slots.",
+            "Do not copy prior commands, vocabulary, family ids, rulebooks, or final answers.",
+        ]
+    )
+
+
 def _build_artifact_scrubbed_trace() -> str:
     return "\n".join(
         [
@@ -111,6 +137,21 @@ def _build_artifact_scrubbed_trace() -> str:
             "- Separate semantic decoding from exact surface generation.",
             "- Before final output, audit that every generated form uses only current-episode evidence.",
             "Quarantine rule: discard any memory that names prior surface forms, task answers, family identifiers, or concrete rulebooks.",
+        ]
+    )
+
+
+def _build_artifact_scrubbed_executable_trace() -> str:
+    return "\n".join(
+        [
+            "ARTIFACT-SCRUBBED EXECUTABLE TRACE TEMPLATE.",
+            "Reusable policy:",
+            "- Use a fixed action protocol: hypothesis, bounded query, verifier label, repair, audit.",
+            "- Query only current-episode diagnostic examples; reject direct target queries.",
+            "- Keep action traces as abstract operations and coarse feedback categories.",
+            "- Promote a learned action only if counterfactual and held-out removal deltas are nonnegative.",
+            "- Quarantine any memory whose benefit disappears without the source-specific harness.",
+            "No prior surface forms, task answers, family identifiers, or concrete rulebooks are reusable.",
         ]
     )
 

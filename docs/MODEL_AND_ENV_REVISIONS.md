@@ -112,3 +112,4 @@ Day 3 added `composition_swap` and `heldout_family` to `run_leakage`.
 - Day 2 leakage eval and Qwen route observation: [docs/result/DAY2_LEAKAGE_RESULT.md](result/DAY2_LEAKAGE_RESULT.md)
 - Day 3 stronger leakage transforms and expectation gap analysis: [docs/result/DAY3_LEAKAGE_RESULT.md](result/DAY3_LEAKAGE_RESULT.md)
 - Day 4-6 API-only trace, proxy, and adoption report: [docs/result/DAY4_DAY6_API_REPORT.md](result/DAY4_DAY6_API_REPORT.md)
+- Day 8 interactive K_gen smoke and full-sweep gate: [docs/result/DAY8_INTERACTIVE_KGEN_SMOKE.md](result/DAY8_INTERACTIVE_KGEN_SMOKE.md)

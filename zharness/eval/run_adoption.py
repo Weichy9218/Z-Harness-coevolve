@@ -90,7 +90,11 @@ async def run_experiment(args: argparse.Namespace) -> Dict[str, object]:
         if agent is not None:
             await agent.aclose()
 
-    summary = _summarize(records)
+    summary = _summarize(
+        records,
+        robust_delta_tolerance=args.robust_delta_tolerance,
+        quarantine_skill_ids={"kspec_source_rulebook"},
+    )
     payload = {
         "config": vars(args),
         "skill_ids": [skill.skill_id for skill in build_skill_library(make_episode(args.seed, difficulty=args.difficulty))],
@@ -231,7 +235,12 @@ def build_adoption_prompt(target_episode: Episode, skills: Sequence[Skill], max_
     return "\n".join(sections)
 
 
-def _summarize(records: List[Dict[str, object]]) -> Dict[str, object]:
+def _summarize(
+    records: List[Dict[str, object]],
+    *,
+    robust_delta_tolerance: float = 0.0,
+    quarantine_skill_ids: set[str] | None = None,
+) -> Dict[str, object]:
     full_records = [record for record in records if record["removed_skill_id"] is None]
     removal_records = [record for record in records if record["removed_skill_id"] is not None]
     skill_ids = sorted({skill_id for record in records for skill_id in record["active_skill_ids"]})
@@ -311,10 +320,97 @@ def _summarize(records: List[Dict[str, object]]) -> Dict[str, object]:
         "adoption": adoption,
         "removal_delta": removal_delta,
         "removal_delta_by_transform": removal_delta_by_transform,
+        "robust_adoption": _classify_robust_adoption(
+            skill_ids=skill_ids,
+            removal_delta_by_transform=removal_delta_by_transform,
+            tolerance=robust_delta_tolerance,
+            quarantine_skill_ids=quarantine_skill_ids or set(),
+        ),
         "spearman_adoption_vs_removal_delta": _spearman(adoption_scores, deltas),
         "num_full_records": len(full_records),
         "num_removal_records": len(removal_records),
     }
+
+
+def _classify_robust_adoption(
+    *,
+    skill_ids: Sequence[str],
+    removal_delta_by_transform: Dict[str, Dict[str, Dict[str, float]]],
+    tolerance: float,
+    quarantine_skill_ids: set[str] | None = None,
+) -> Dict[str, Dict[str, object]]:
+    quarantine_skill_ids = quarantine_skill_ids or set()
+    counterfactual_transforms = [
+        transform
+        for transform in removal_delta_by_transform
+        if transform not in {"same_world", "heldout_family"}
+    ]
+    result: Dict[str, Dict[str, object]] = {}
+    for skill_id in skill_ids:
+        seen_delta = _transform_delta(removal_delta_by_transform, "same_world", skill_id)
+        heldout_delta = _transform_delta(removal_delta_by_transform, "heldout_family", skill_id)
+        counterfactual_deltas = [
+            _transform_delta(removal_delta_by_transform, transform, skill_id)
+            for transform in counterfactual_transforms
+            if _transform_n(removal_delta_by_transform, transform, skill_id) > 0
+        ]
+        counterfactual_mean = mean(counterfactual_deltas) if counterfactual_deltas else 0.0
+        min_counterfactual_delta = min(counterfactual_deltas) if counterfactual_deltas else 0.0
+        has_seen_positive = seen_delta > tolerance
+        has_robust_positive = max([heldout_delta, counterfactual_mean]) > tolerance
+        has_negative_transfer = (
+            min_counterfactual_delta < -tolerance
+            or (
+                _transform_n(removal_delta_by_transform, "heldout_family", skill_id) > 0
+                and heldout_delta < -tolerance
+            )
+        )
+
+        if skill_id in quarantine_skill_ids and (has_seen_positive or has_robust_positive):
+            decision = "quarantine"
+            reason = "known_source_specific_leakage"
+        elif has_negative_transfer and has_seen_positive:
+            decision = "quarantine"
+            reason = "seen_positive_counterfactual_or_heldout_negative"
+        elif has_robust_positive and not has_negative_transfer:
+            decision = "promote_candidate"
+            reason = "nonnegative_counterfactual_and_heldout_delta"
+        elif has_seen_positive:
+            decision = "quarantine"
+            reason = "seen_only_positive"
+        else:
+            decision = "reject_or_redundant"
+            reason = "no_positive_removal_delta"
+
+        result[skill_id] = {
+            "decision": decision,
+            "reason": reason,
+            "seen_delta": seen_delta,
+            "counterfactual_mean_delta": counterfactual_mean,
+            "min_counterfactual_delta": min_counterfactual_delta,
+            "heldout_delta": heldout_delta,
+        }
+    return result
+
+
+def _transform_delta(
+    removal_delta_by_transform: Dict[str, Dict[str, Dict[str, float]]],
+    transform_name: str,
+    skill_id: str,
+) -> float:
+    return float(
+        removal_delta_by_transform.get(transform_name, {})
+        .get(skill_id, {})
+        .get("mean_accuracy_delta", 0.0)
+    )
+
+
+def _transform_n(
+    removal_delta_by_transform: Dict[str, Dict[str, Dict[str, float]]],
+    transform_name: str,
+    skill_id: str,
+) -> int:
+    return int(removal_delta_by_transform.get(transform_name, {}).get(skill_id, {}).get("n", 0) or 0)
 
 
 def _spearman(xs: Sequence[float], ys: Sequence[float]) -> float:
@@ -384,6 +480,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--difficulty", choices=("basic", "hard"), default="hard")
     parser.add_argument("--transforms", default="same_world,composition_swap,heldout_family")
     parser.add_argument("--max-called-skills", type=int, default=2)
+    parser.add_argument("--robust-delta-tolerance", type=float, default=0.0)
     parser.add_argument("--client", default="openrouter_newapi")
     parser.add_argument("--model", default="deepseek-v3.2")
     parser.add_argument("--api-key-env", default="apihy_API_KEY_deepseek")
