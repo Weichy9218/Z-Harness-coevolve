@@ -174,7 +174,7 @@ Process metrics 借 Harness-Bench：
 | Day 8 | Interactive K_gen | `k_gen_interactive` 支持 bounded hypothesis/query/verify/repair/audit；records 保存 action trace、query/verifier/repair/final-attempt cost；与 `k_gen_exec` 和 `k_spec` 复跑 headroom | 8-episode headroom 已完成；lean repair 有效但较贵，见 [docs/result/DAY8_INTERACTIVE_KGEN_SMOKE.md](result/DAY8_INTERACTIVE_KGEN_SMOKE.md) |
 | Day 9 | Action trace proxy + robust adoption | memory proxy 增加 `raw_action`、`action_stripped`、`artifact_scrubbed_action`；adoption report 同时报 naive adoption 和 robust classification | 2-episode smoke 已完成；safe memory 尚未迁移，robust adoption 已 quarantine source rulebook，见 [docs/result/DAY8_INTERACTIVE_KGEN_SMOKE.md](result/DAY8_INTERACTIVE_KGEN_SMOKE.md) |
 | Day 10 | MiniAPI v0 | 500 行以内 simulator；支持 hidden API constraints 和 deterministic verifier；复用 headroom / leakage / adoption 三套协议 | simulator、headroom/counterfactual、memory proxy、robust adoption smoke 已完成；见 [docs/result/DAY10_MINIAPI_SMOKE.md](result/DAY10_MINIAPI_SMOKE.md) 和 [docs/result/DAY10_MINIAPI_MEMORY_ADOPTION.md](result/DAY10_MINIAPI_MEMORY_ADOPTION.md) |
-| Day 11 | First paper-facing result pack | 一张 scaffold headroom 表；一张 leakage transform 表；一张 adoption-vs-removal 图或表；一页 kill-condition 结论 | 待做 |
+| Day 11 | First paper-facing result pack | 一张 scaffold headroom 表；一张 leakage transform 表；一张 adoption-vs-removal 图或表；一页 kill-condition 结论 | training manifest gate 已完成；paper-facing table pack 待做，见 [docs/result/NOGPU_TRAINING_MANIFEST_GATE.md](result/NOGPU_TRAINING_MANIFEST_GATE.md) |
 
 MiniLang server phase gate：只有 Day 3-9 通过后，才考虑上 8xA100 做 MiniLang SFT / GRPO。MiniAPI 是后续 agentic validation，不是启动 MiniLang training 的前置条件。训练细节和 verl / SFT 配置放在 [docs/TRAINING_PLAN.md](TRAINING_PLAN.md)；本文件只保留进入训练的 scientific gate。
 
@@ -184,6 +184,9 @@ MiniLang server phase gate：只有 Day 3-9 通过后，才考虑上 8xA100 做 
 2. Offline adoption 有 removal correlation，并且 robust adoption 不会 promotion K_spec。
 3. Eval splits 固定且 manifest 可复现。
 4. SFT / verl configs 只消费 scrubbed manifest。
+
+当前 `run_training_manifest` 已提供第一版可验证 manifest gate；真正训练仍需 GPU / hosted
+training runtime。
 
 ## Later Validation
 

@@ -52,6 +52,17 @@ Required exports：
 - parquet for verl SFT / GRPO data loaders。
 - eval manifest with immutable split ids。
 
+Current no-GPU gate：
+
+```bash
+python -m zharness.eval.run_training_manifest --episodes 2 --seed 31
+```
+
+The validator fails closed: `trainable=true` requires leakage scan pass,
+`robust_adoption.decision == "promote_candidate"`, and a non-raw trace variant.
+Raw/source-specific rows remain allowed only as control rows with
+`trainable=false`.
+
 ## SFT Track
 
 Purpose：测试 trace abstraction 是否能 internalize 成 `theta`。
