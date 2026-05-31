@@ -26,6 +26,7 @@ MiniLang hard mode 已经有 scaffold headroom，Day 2 leakage smoke 也支持�
 - [Day 4-6 API-only trace/proxy/adoption report](docs/result/DAY4_DAY6_API_REPORT.md)
 - [Executable K_gen headroom repair](docs/result/KGEN_EXEC_HEADROOM_RESULT.md)
 - [Interactive K_gen smoke](docs/result/DAY8_INTERACTIVE_KGEN_SMOKE.md)
+- [MiniAPI / ToolWorld smoke](docs/result/DAY10_MINIAPI_SMOKE.md)
 - [Model and environment notes](docs/MODEL_AND_ENV_REVISIONS.md)
 
 ## Quick Start
@@ -102,9 +103,16 @@ python -m zharness.eval.run_headroom \
 
 Run artifacts are written under `runs/`.
 
+MiniAPI / ToolWorld no-GPU smoke：
+
+```bash
+python -m zharness.eval.run_miniapi --episodes 4 --seed 31
+```
+
 ## Documentation Map
 
 - [docs/EXPERIMENT_PLAN.md](docs/EXPERIMENT_PLAN.md)：paper-facing scientific plan, metrics, falsifiers, stage gates.
+- [docs/HARNESSX_REPRO_AND_MIGRATION_PLAN.md](docs/HARNESSX_REPRO_AND_MIGRATION_PLAN.md)：HarnessX 复现路线、可借鉴机制、MiniAPI 迁移和 GPU boundary。
 - [docs/TRAINING_PLAN.md](docs/TRAINING_PLAN.md)：SFT / verl / GRPO plan for the 8xA100 server phase.
 - [docs/RELATED_EXPERIMENTS.md](docs/RELATED_EXPERIMENTS.md)：SAGE、Meta-Harness、SIA、Harness-Bench、AppWorld、tau-bench、Terminal-Bench 2、verl 的定位。
 - [docs/KGEN_INTERACTIVE_PROTOCOL.md](docs/KGEN_INTERACTIVE_PROTOCOL.md)：`k_gen_interactive` 的 action protocol、trace contract、robust adoption gate。
@@ -117,6 +125,7 @@ Run artifacts are written under `runs/`.
 core/llm/                    # copied from galaxy-selfevolve
 docs/                        # experiment design, training route, related work, result notes
 zharness/envs/minilang/      # synthetic hidden-rule language environment
+zharness/envs/miniapi/       # deterministic stateful API workflow environment
 zharness/agents/             # LLM wrappers, prompts, answer parsing
 zharness/eval/               # runnable evaluation scripts
 scripts/check_llm.py         # API smoke check
