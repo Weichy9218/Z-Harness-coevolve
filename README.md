@@ -1,55 +1,44 @@
 # Z-Harness-coevolve
 
-研究目标：把 agent 成功经验分配到正确位置。一次 scaffold / skill 帮助模型解决隐藏规则任务后，需要判断哪些经验应该留在 harness/skill，哪些可以 distill 到 weights，哪些必须 quarantine/forget。
+本仓库现在只服务一个目标：打通 HarnessX 风格的 harness/model co-evolution 闭环，优先落在 Terminal-Bench 2.1 上。
 
-当前判断：不要先做 Hanabi -> Terminal-Bench 2，也不要先写完整 co-evolve 大系统。v0 先在可控、可验证、可做 counterfactual 的 MiniLang / MiniAPI 中打穿三个问题：
+旧的 MiniLang/MiniAPI synthetic scaffold-adoption 路线已经归档。它留下的有用经验是：raw trajectory 容易把 task-specific facts 带进训练，必须保留 split、leakage scan、removal ablation 和 held-out gate。但它不再是本项目主线。
 
-1. **Scaffold headroom**：scaffold 是否真的降低 learning cost。
-2. **Trace abstraction**：stripped trace 是否比 raw trace 更能迁移、更少泄漏。
-3. **Adoption causality**：adoption signal 是否能预测 skill / harness item 的 causal usefulness。
+## Current Direction
 
-如果这三项至少两项成立，再进入 SFT / verl / GRPO / AppWorld / Terminal-Bench 2。否则先修环境、trace abstraction 或 skill routing，不急着烧 8 张 A100。
+核心判断：
 
-## Scientific Contract
+1. **HarnessX 是基础设施主线。** 我们要复用 `Harness.run(task) -> trajectory/reward -> HarnessConfig evolution -> training records -> model update` 的闭环，而不是继续维护自造 synthetic harness。
+2. **Terminal-Bench 2.1 是第一个主 benchmark。** 官方 leaderboard 当前使用 `terminal-bench/terminal-bench-2-1`；2.0 只保留为历史 smoke/迁移对照，不再作为主线。
+3. **先 harness-only，再 model update。** 本地先跑 HarnessX + Harbor + Terminal-Bench smoke；服务器 8xA100 再训练 Qwen 8B LoRA/SFT/GRPO。
+4. **外部 benchmark 分层使用。** τ³-bench text domains 是下一批 text-agent transfer target；WebArena 和 BALROG 做泛化压力测试；HCAST 和 METR-HRS 做 held-out calibration，不进频繁优化 loop。
 
-核心对象是 experience allocation：`K_spec` quarantine，`K_gen` 进入 skill/harness，真正泛化的 `theta` 才能进入 weights。完整判据和 daily checkpoint 只维护在 [docs/EXPERIMENT_PLAN.md](docs/EXPERIMENT_PLAN.md)。
+## Documentation Map
 
-## Current Evidence
+- [docs/README.md](docs/README.md): 文档入口。
+- [docs/DIRECTION.md](docs/DIRECTION.md): 新目标、旧路线为什么停、done criteria。
+- [docs/HARNESSX_SIA_FLOW.md](docs/HARNESSX_SIA_FLOW.md): HarnessX 与 SIA 的流程对应和闭环设计。
+- [docs/BENCHMARK_STRATEGY.md](docs/BENCHMARK_STRATEGY.md): Terminal-Bench、WebArena、BALROG、HCAST、METR-HRS 的分层使用。
+- [docs/TERMINAL_BENCH_2_PLAN.md](docs/TERMINAL_BENCH_2_PLAN.md): Terminal-Bench 2.1 优先实现路线。
+- [docs/QWEN8B_TRAINING_PLAN.md](docs/QWEN8B_TRAINING_PLAN.md): 8xA100 上 Qwen 8B 的训练计划。
+- [docs/SMOKE_RESULTS.md](docs/SMOKE_RESULTS.md): 本地 smoke 结果和迁移证据。
+- [docs/archive/PRIOR_RESULTS_SUMMARY.md](docs/archive/PRIOR_RESULTS_SUMMARY.md): 旧 MiniLang/MiniAPI 代表性结果摘要。
+- [docs/SOURCES.md](docs/SOURCES.md): 关键外部和本地资料来源。
 
-MiniLang hard mode 已经有 scaffold headroom，Day 2 leakage smoke 也支持当前 measurement：`renamed_vocab` 会让 source raw K_spec 崩掉，而 target scaffold 恢复；`order_swap` 主要影响 generation，说明 parse/generate 必须分开报。
+## Local State
 
-具体表格只维护在 result archive，避免 README 和 docs 漂移：
+本机已有 HarnessX clone：
 
-- [Day 1 scaffold headroom](docs/result/DAY1_RESULT.md)
-- [Day 2 leakage eval](docs/result/DAY2_LEAKAGE_RESULT.md)
-- [Day 3 stronger leakage transforms](docs/result/DAY3_LEAKAGE_RESULT.md)
-- [Day 4-6 API-only trace/proxy/adoption report](docs/result/DAY4_DAY6_API_REPORT.md)
-- [Executable K_gen headroom repair](docs/result/KGEN_EXEC_HEADROOM_RESULT.md)
-- [Interactive K_gen smoke](docs/result/DAY8_INTERACTIVE_KGEN_SMOKE.md)
-- [MiniAPI / ToolWorld smoke](docs/result/DAY10_MINIAPI_SMOKE.md)
-- [MiniAPI memory/adoption smoke](docs/result/DAY10_MINIAPI_MEMORY_ADOPTION.md)
-- [No-GPU training manifest gate](docs/result/NOGPU_TRAINING_MANIFEST_GATE.md)
-- [HarnessX local reproduction smoke](docs/result/HARNESSX_LOCAL_REPRO_SMOKE.md)
-- [Model and environment notes](docs/MODEL_AND_ENV_REVISIONS.md)
-
-## Quick Start
-
-`.env` 已从 `galaxy-selfevolve` 复制到本 repo 根目录，但被 `.gitignore` 排除，不会提交。
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
+```text
+/Users/weichy/code/HarnessX
+/Users/weichy/code/HarnessX/benchmarks/terminal_bench_2
 ```
 
-Deterministic smoke test：
+本机已跑通 Harbor + Docker + Terminal-Bench 2.1 oracle smoke。下一步是在 HarnessX 仓库里跑 2.1 HarnessXAgent smoke，再决定是否把自动化 wrapper 放回本仓库。
 
-```bash
-python -m pytest
-python -m zharness.eval.run_headroom --episodes 2 --mock-policy oracle
-```
+## Quick Checks
 
-API smoke：
+本仓库保留 API route smoke：
 
 ```bash
 python scripts/check_llm.py \
@@ -60,90 +49,10 @@ python scripts/check_llm.py \
   --reasoning-effort none
 ```
 
-主线 hard-mode headroom sweep：
+方向文档检查：
 
 ```bash
-python -m zharness.eval.run_headroom \
-  --episodes 8 \
-  --difficulty hard \
-  --support-budget 8 \
-  --client openrouter_newapi \
-  --model deepseek-v3.2 \
-  --api-key-env apihy_API_KEY_deepseek \
-  --base-url-env apihy_BASE_URL \
-  --reasoning-effort none \
-  --conditions no_scaffold,k_spec,k_gen,k_spec_k_gen
+.venv/bin/python -m pytest
 ```
 
-Counterfactual leakage sweep：
-
-```bash
-python -m zharness.eval.run_leakage \
-  --episodes 8 \
-  --difficulty hard \
-  --support-budget 8 \
-  --client openrouter_newapi \
-  --model deepseek-v3.2 \
-  --api-key-env apihy_API_KEY_deepseek \
-  --base-url-env apihy_BASE_URL \
-  --reasoning-effort none \
-  --transforms renamed_vocab,order_swap,composition_swap,heldout_family
-```
-
-Qwen through apihy needs visible thinking disabled:
-
-```bash
-python -m zharness.eval.run_headroom \
-  --episodes 1 \
-  --difficulty hard \
-  --client openrouter_newapi \
-  --model qwen3.5-27b \
-  --api-key-env apihy_API_KEY_qwen \
-  --base-url-env apihy_BASE_URL \
-  --max-tokens 1024 \
-  --extra-body-json '{"enable_thinking": false}'
-```
-
-Run artifacts are written under `runs/`.
-
-MiniAPI / ToolWorld no-GPU smoke：
-
-```bash
-python -m zharness.eval.run_miniapi --episodes 4 --seed 31
-python -m zharness.eval.run_miniapi_memory_proxy --episodes 4 --seed 31
-python -m zharness.eval.run_miniapi_adoption --episodes 4 --seed 31
-python -m zharness.eval.run_training_manifest --episodes 2 --seed 31
-```
-
-## Documentation Map
-
-- [docs/EXPERIMENT_PLAN.md](docs/EXPERIMENT_PLAN.md)：paper-facing scientific plan, metrics, falsifiers, stage gates.
-- [docs/HARNESSX_REPRO_AND_MIGRATION_PLAN.md](docs/HARNESSX_REPRO_AND_MIGRATION_PLAN.md)：HarnessX 复现路线、可借鉴机制、MiniAPI 迁移和 GPU boundary。
-- [docs/TRAINING_PLAN.md](docs/TRAINING_PLAN.md)：SFT / verl / GRPO plan for the 8xA100 server phase.
-- [docs/RELATED_EXPERIMENTS.md](docs/RELATED_EXPERIMENTS.md)：SAGE、Meta-Harness、SIA、Harness-Bench、AppWorld、tau-bench、Terminal-Bench 2、verl 的定位。
-- [docs/KGEN_INTERACTIVE_PROTOCOL.md](docs/KGEN_INTERACTIVE_PROTOCOL.md)：`k_gen_interactive` 的 action protocol、trace contract、robust adoption gate。
-- [docs/MODEL_AND_ENV_REVISIONS.md](docs/MODEL_AND_ENV_REVISIONS.md)：model routing and MiniLang environment notes.
-- [docs/result/](docs/result/)：daily factual result archives.
-
-## Project Layout
-
-```text
-core/llm/                    # copied from galaxy-selfevolve
-docs/                        # experiment design, training route, related work, result notes
-zharness/envs/minilang/      # synthetic hidden-rule language environment
-zharness/envs/miniapi/       # deterministic stateful API workflow environment
-zharness/agents/             # LLM wrappers, prompts, answer parsing
-zharness/eval/               # runnable evaluation scripts
-scripts/check_llm.py         # API smoke check
-tests/                       # deterministic tests
-```
-
-## Scope Control
-
-v0 is intentionally no-training and API-only. The first deliverable is not a big self-improving system; it is a clean measurement protocol showing that:
-
-1. `K_spec` gives real headroom.
-2. Counterfactual transforms catch leakage.
-3. Robust adoption correlates with counterfactual removal delta.
-
-Training starts only after trace quality and leakage tests are stable. The server phase should support both SFT and verl, but raw trace SFT is a control arm, not the intended method.
+Terminal-Bench smoke 在 HarnessX 仓库执行，详见 [docs/TERMINAL_BENCH_2_PLAN.md](docs/TERMINAL_BENCH_2_PLAN.md)。
