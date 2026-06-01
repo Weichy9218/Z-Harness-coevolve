@@ -35,6 +35,42 @@ Result:
 
 Observation: Harbor 0.13 resolves Terminal-Bench 2.1 package task names with a `terminal-bench/` prefix. The HarnessX wrapper now accepts old short names such as `crack-7z-hash` and expands them.
 
+## Terminal-Bench 2.1 HarnessX H0 Smoke - 2026-06-02
+
+Purpose: verify that the active HarnessXAgent path runs end to end on Terminal-Bench 2.1.
+
+Command:
+
+```bash
+set -a; source /Users/weichy/code/Z-Harness-coevolve/.env; set +a
+PATH="/Users/weichy/code/HarnessX/.venv/bin:$PATH" \
+  /Users/weichy/code/HarnessX/.venv/bin/python \
+  /Users/weichy/code/HarnessX/benchmarks/terminal_bench_2/scripts/tb2_eval.py \
+  --env docker \
+  -m deepseek-v3.2 \
+  -k "$apihy_API_KEY_deepseek" \
+  -b "$apihy_BASE_URL" \
+  -t crack-7z-hash \
+  -n 1 \
+  --job-name tb2-1-h0-smoke \
+  --max-steps 100
+```
+
+Result:
+
+- Dataset: `terminal-bench/terminal-bench-2-1`
+- Task: `terminal-bench/crack-7z-hash`
+- Trial: `crack-7z-hash__2FXsYpf`
+- Job path: `/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke`
+- Reward: `0.0`
+- Exceptions: `0`
+- Runtime: `31m07s`
+- Agent execution: about `30m`
+- HarnessX trace: `93` steps, `1,448,375` recorded input tokens.
+- Verifier failure: `/app/solution.txt` did not exist.
+
+Observation: this proves the HarnessX rollout path works on 2.1, but H0 does not solve the task with this model/config. See [HARNESSX_TB21_REPRO_REPORT.md](HARNESSX_TB21_REPRO_REPORT.md) for the full analysis.
+
 ## Historical Terminal-Bench 2.0 H0 Smoke - 2026-06-02
 
 Status: superseded by Terminal-Bench 2.1. Keep only as migration evidence for the local Harbor/Docker/HarnessX path.

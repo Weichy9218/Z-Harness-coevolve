@@ -21,6 +21,7 @@
 - [docs/BENCHMARK_STRATEGY.md](docs/BENCHMARK_STRATEGY.md): Terminal-Bench、WebArena、BALROG、HCAST、METR-HRS 的分层使用。
 - [docs/TERMINAL_BENCH_2_PLAN.md](docs/TERMINAL_BENCH_2_PLAN.md): Terminal-Bench 2.1 优先实现路线。
 - [docs/QWEN8B_TRAINING_PLAN.md](docs/QWEN8B_TRAINING_PLAN.md): 8xA100 上 Qwen 8B 的训练计划。
+- [docs/HARNESSX_TB21_REPRO_REPORT.md](docs/HARNESSX_TB21_REPRO_REPORT.md): HarnessX 本地复现分析报告。
 - [docs/SMOKE_RESULTS.md](docs/SMOKE_RESULTS.md): 本地 smoke 结果和迁移证据。
 - [docs/archive/PRIOR_RESULTS_SUMMARY.md](docs/archive/PRIOR_RESULTS_SUMMARY.md): 旧 MiniLang/MiniAPI 代表性结果摘要。
 - [docs/SOURCES.md](docs/SOURCES.md): 关键外部和本地资料来源。
@@ -34,7 +35,7 @@
 /Users/weichy/code/HarnessX/benchmarks/terminal_bench_2
 ```
 
-本机已跑通 Harbor + Docker + Terminal-Bench 2.1 oracle smoke。下一步是在 HarnessX 仓库里跑 2.1 HarnessXAgent smoke，再决定是否把自动化 wrapper 放回本仓库。
+本机已跑通 Harbor + Docker + Terminal-Bench 2.1 oracle smoke，并完成一条 HarnessXAgent H0 本地 trial。当前 H0 reward 为 `0.0`，失败点是 agent 未在 timeout 前写出 `/app/solution.txt`；详见复现报告。
 
 ## Quick Checks
 

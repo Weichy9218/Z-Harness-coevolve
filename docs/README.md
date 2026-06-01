@@ -9,9 +9,10 @@
 3. [BENCHMARK_STRATEGY.md](BENCHMARK_STRATEGY.md): benchmark 分层。
 4. [TERMINAL_BENCH_2_PLAN.md](TERMINAL_BENCH_2_PLAN.md): 当前最优先执行项，已切到 Terminal-Bench 2.1。
 5. [QWEN8B_TRAINING_PLAN.md](QWEN8B_TRAINING_PLAN.md): 服务器训练阶段。
-6. [SMOKE_RESULTS.md](SMOKE_RESULTS.md): 本地 smoke 结果和迁移证据。
-7. [archive/PRIOR_RESULTS_SUMMARY.md](archive/PRIOR_RESULTS_SUMMARY.md): 旧路线留下的代表性证据。
-8. [SOURCES.md](SOURCES.md): 外部来源和本地证据。
+6. [HARNESSX_TB21_REPRO_REPORT.md](HARNESSX_TB21_REPRO_REPORT.md): 本地 Terminal-Bench 2.1 的 HarnessX 复现分析报告。
+7. [SMOKE_RESULTS.md](SMOKE_RESULTS.md): 本地 smoke 结果和迁移证据。
+8. [archive/PRIOR_RESULTS_SUMMARY.md](archive/PRIOR_RESULTS_SUMMARY.md): 旧路线留下的代表性证据。
+9. [SOURCES.md](SOURCES.md): 外部来源和本地证据。
 
 ## Maintenance Rule
 
