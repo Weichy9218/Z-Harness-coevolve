@@ -1,0 +1,134 @@
+{
+  "ledger_id": "tb2_1_harness_only_runs_v0",
+  "schema_version": "tb2_run_ledger_v0",
+  "created_at": "2026-06-02",
+  "controller_repo": "/Users/weichy/code/Z-Harness-coevolve",
+  "runnable_substrate": "/Users/weichy/code/HarnessX",
+  "benchmark": {
+    "name": "Terminal-Bench",
+    "version": "2.1",
+    "dataset": "terminal-bench/terminal-bench-2-1"
+  },
+  "fixed_route": {
+    "model": "deepseek-v3.2",
+    "api_base": "https://zgc.apihy.com/v1",
+    "sandbox": "benchmarks.terminal_bench_2.dind_environment:DinDDockerEnvironment",
+    "sandbox_kwargs": {
+      "network_mode": "host"
+    },
+    "max_steps": 100,
+    "request_timeout_sec": 600,
+    "n_concurrent": 1
+  },
+  "training_export_policy": {
+    "enabled_now": false,
+    "reason": "Harness-only gain is not established yet; no H* train-split accepted trajectories exist.",
+    "required_entry_fields": {
+      "split": "train",
+      "status": "completed",
+      "accepted_for_training": true,
+      "reward": 1.0
+    },
+    "heldout_policy": "Never export heldout/test trajectories."
+  },
+  "entries": [
+    {
+      "entry_id": "h0_smoke_crack_7z_hash",
+      "harness_variant": "H0",
+      "split": "dev_tuning",
+      "status": "completed",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h0-smoke",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke",
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke/crack-7z-hash__2FXsYpf/result.json",
+      "reward": 0.0,
+      "failure_taxonomy": [
+        "tool_availability",
+        "stale_apt_metadata",
+        "slow_bruteforce_timeout"
+      ],
+      "notes": "Full H0 smoke. Reward 0; verifier missed /app/solution.txt. Audit-only, not training data."
+    },
+    {
+      "entry_id": "h1a_prompt_only_crack_gate",
+      "harness_variant": "H1a",
+      "split": "dev_tuning",
+      "status": "invalid_stopped",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h1-apt-recovery-crack-gate-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h1-apt-recovery-crack-gate-20260602",
+      "trial_result": "",
+      "failure_taxonomy": [
+        "invalid_gate",
+        "preemptive_apt_update",
+        "slow_bruteforce_drift"
+      ],
+      "notes": "Stopped before verifier; mechanism was not clean."
+    },
+    {
+      "entry_id": "h1b_strict_apt_crack_gate",
+      "harness_variant": "H1b",
+      "split": "dev_tuning",
+      "status": "invalid_stopped",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h1b-strict-apt-gate-crack-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h1b-strict-apt-gate-crack-20260602",
+      "trial_result": "",
+      "failure_taxonomy": [
+        "invalid_gate",
+        "apt_recovery_works",
+        "heavy_install_timeout",
+        "slow_bruteforce_drift"
+      ],
+      "notes": "AptInstallRecovery mechanism worked, but hashcat retry timed out and model returned to slow brute force."
+    },
+    {
+      "entry_id": "h2a_tool_cost_crack_gate",
+      "harness_variant": "H2a",
+      "split": "dev_tuning",
+      "status": "invalid_stopped",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h2-tool-cost-crack-gate-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2-tool-cost-crack-gate-20260602",
+      "trial_result": "",
+      "failure_taxonomy": [
+        "invalid_gate",
+        "slow_bruteforce_guard_false_negative"
+      ],
+      "notes": "Stopped after guard missed an unbounded loop with a preview slice; fixed by regression test."
+    },
+    {
+      "entry_id": "h2b_tool_cost_crack_gate",
+      "harness_variant": "H2b",
+      "split": "dev_tuning",
+      "status": "invalid_stopped",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h2b-tool-cost-crack-gate-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2b-tool-cost-crack-gate-20260602",
+      "trial_result": "",
+      "failure_taxonomy": [
+        "invalid_gate",
+        "slow_bruteforce_guard_false_positive"
+      ],
+      "notes": "Stopped after guard incorrectly blocked a small literal candidate loop; fixed by bounded literal-loop regression tests."
+    },
+    {
+      "entry_id": "h2c_tool_cost_crack_gate_prepared",
+      "harness_variant": "H2c",
+      "split": "dev_tuning",
+      "status": "prepared_not_run",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h2c-tool-cost-crack-gate-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2c-tool-cost-crack-gate-20260602",
+      "trial_result": "",
+      "failure_taxonomy": [],
+      "notes": "Dry-run passed. Real run requires TB2_API_KEY in the execution shell."
+    }
+  ]
+}

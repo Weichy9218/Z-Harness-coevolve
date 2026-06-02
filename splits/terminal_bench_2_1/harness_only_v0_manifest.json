@@ -1,0 +1,170 @@
+{
+  "manifest_id": "tb2_1_harness_only_v0",
+  "created_at": "2026-06-02",
+  "purpose": "Fixed Terminal-Bench 2.1 split for H*/M0 harness-only ablation before any Qwen 8B training.",
+  "controller_repo": {
+    "path": "/Users/weichy/code/Z-Harness-coevolve",
+    "commit": "189508fec6bcedca7f521d6b2a9b6f31ef5a5262"
+  },
+  "external_substrate": {
+    "repo": "HarnessX",
+    "path": "/Users/weichy/code/HarnessX",
+    "branch_observed": "codex/tb2-1-adapter",
+    "commit_observed": "76f24218b5ad8e0e880326aab102f9002752fca3",
+    "role": "upstream/runnable substrate; do not migrate or vendor the repo into Z-Harness-coevolve"
+  },
+  "benchmark": {
+    "name": "Terminal-Bench",
+    "version": "2.1",
+    "dataset": "terminal-bench/terminal-bench-2-1",
+    "dataset_ref_observed_from_h0_smoke": "sha256:7d7bdc1cbedad549fc1140404bd4dc45e5fd0ea7c4186773687d177ad3a0699a",
+    "task_name_prefix": "terminal-bench/",
+    "dataset_vendor_policy": "Do not vendor Terminal-Bench or task files into this repo; record dataset pin, task split, command, substrate commit, and artifact paths."
+  },
+  "baseline_model_route": {
+    "model": "deepseek-v3.2",
+    "api_base_observed_from_h0_smoke": "https://zgc.apihy.com/v1",
+    "api_key_env_for_harnessx_local_script": "TB2_API_KEY",
+    "fixed_for_ablation": true
+  },
+  "sandbox_backend": {
+    "name": "DinD Docker",
+    "harnessx_environment_import_path": "benchmarks.terminal_bench_2.dind_environment:DinDDockerEnvironment",
+    "kwargs_observed_from_h0_smoke": {
+      "network_mode": "host"
+    },
+    "fixed_for_ablation": true
+  },
+  "candidate_task_source": {
+    "status": "scaffold",
+    "evidence": [
+      "HarnessX benchmarks/terminal_bench_2/README.md historical all-89 summaries",
+      "HarnessX benchmark scripts and current H0 smoke artifact"
+    ],
+    "verified_cache_state": "Only crack-7z-hash was present in /Users/weichy/.cache/harbor/tasks during this inspection.",
+    "todo_before_paper_table": [
+      "Run `harbor dataset download terminal-bench/terminal-bench-2-1 --cache` or an equivalent Harbor metadata listing on the eval machine.",
+      "Verify every task in dev_tuning and heldout exists in the active dataset ref.",
+      "Record each task ref/checksum after first trial result.json is produced."
+    ]
+  },
+  "tuning_loop_rules": [
+    "Use dev_tuning only for H1/H* harness tuning.",
+    "Do not inspect heldout trajectories or verifier outputs while designing H1.",
+    "Use the same model route, sandbox backend, task split, max_steps, request_timeout_sec, and concurrency for H0/M0 and H1/M0.",
+    "Record pass/reward, runtime, steps, token count, tool-call count, infra errors, verifier failures, and output artifact paths for every trial.",
+    "Do not train Qwen 8B or export SFT data until harness-only gain is established."
+  ],
+  "splits": {
+    "train_pretraining": {
+      "tasks_file": "splits/terminal_bench_2_1/harness_train_v0.tasks.json",
+      "status": "empty_scaffold",
+      "policy": "Populate only after H* is frozen and the active Harbor dataset task list is verified. Do not use dev_tuning or heldout trajectories for training export.",
+      "tasks": []
+    },
+    "dev_tuning": {
+      "tasks_file": "splits/terminal_bench_2_1/harness_dev_v0.tasks.json",
+      "tasks": [
+        {
+          "name": "crack-7z-hash",
+          "qualified_name": "terminal-bench/crack-7z-hash",
+          "cluster": "archive/password recovery; tool install fallback",
+          "reason": "Observed H0 smoke fail with stale apt/hashcat and slow 7z brute force."
+        },
+        {
+          "name": "password-recovery",
+          "qualified_name": "terminal-bench/password-recovery",
+          "cluster": "credential recovery",
+          "reason": "Neighbor task for checking whether recovery policy generalizes beyond one 7z case."
+        },
+        {
+          "name": "vulnerable-secret",
+          "qualified_name": "terminal-bench/vulnerable-secret",
+          "cluster": "secret handling",
+          "reason": "Tests careful file inspection without using task-specific answer keys."
+        },
+        {
+          "name": "fix-git",
+          "qualified_name": "terminal-bench/fix-git",
+          "cluster": "git repair",
+          "reason": "Common TB2 shell workflow, low external dependency."
+        },
+        {
+          "name": "git-leak-recovery",
+          "qualified_name": "terminal-bench/git-leak-recovery",
+          "cluster": "git forensics",
+          "reason": "Forensics-style task with reproducible file-system evidence."
+        },
+        {
+          "name": "sqlite-db-truncate",
+          "qualified_name": "terminal-bench/sqlite-db-truncate",
+          "cluster": "database repair",
+          "reason": "Checks DB/tool workflow and final-file verification behavior."
+        },
+        {
+          "name": "db-wal-recovery",
+          "qualified_name": "terminal-bench/db-wal-recovery",
+          "cluster": "database recovery",
+          "reason": "Harder recovery task where overlong exploration can hurt."
+        },
+        {
+          "name": "regex-log",
+          "qualified_name": "terminal-bench/regex-log",
+          "cluster": "log parsing",
+          "reason": "Text-processing task with clear verifier signal."
+        },
+        {
+          "name": "log-summary-date-ranges",
+          "qualified_name": "terminal-bench/log-summary-date-ranges",
+          "cluster": "log summarization",
+          "reason": "Checks precise output formatting and verification."
+        },
+        {
+          "name": "configure-git-webserver",
+          "qualified_name": "terminal-bench/configure-git-webserver",
+          "cluster": "service/configuration",
+          "reason": "Includes long-running process/configuration risk without entering heavy ML/internet tasks."
+        }
+      ]
+    },
+    "heldout": {
+      "tasks_file": "splits/terminal_bench_2_1/harness_heldout_v0.tasks.json",
+      "policy": "Hold out from H1/H* tuning. Use only after freezing H* to estimate transfer.",
+      "tasks": [
+        "bn-fit-modify",
+        "cancel-async-tasks",
+        "cobol-modernization",
+        "custom-memory-heap-crash",
+        "distribution-search",
+        "extract-elf",
+        "fix-code-vulnerability",
+        "merge-diff-arc-agi-task",
+        "polyglot-c-py",
+        "schemelike-metacircular-eval"
+      ]
+    }
+  },
+  "h0_smoke_evidence": {
+    "job_name": "tb2-1-h0-smoke",
+    "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke",
+    "task": "terminal-bench/crack-7z-hash",
+    "trial": "crack-7z-hash__2FXsYpf",
+    "task_ref": "sha256:99cbb2269f6bd112d3387fd01cb6900118fe4aded3f75a8d656580a8296a1ae5",
+    "reward": 0.0,
+    "infra_errors": 0,
+    "verifier_failure": "Missing /app/solution.txt.",
+    "agent_execution_seconds": 1799.94,
+    "total_runtime_seconds": 1865.55,
+    "reported_input_tokens": 1448375,
+    "observed_bash_tool_calls": 93,
+    "failure_cluster": "Tool availability/install recovery: john binary required AVX2; hashcat install hit stale apt 404; model fell back to slow per-password 7z brute force and timed out.",
+    "primary_paths": {
+      "job_config": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke/config.json",
+      "job_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke/result.json",
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke/crack-7z-hash__2FXsYpf/result.json",
+      "trial_log": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke/crack-7z-hash__2FXsYpf/trial.log",
+      "verifier_stdout": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke/crack-7z-hash__2FXsYpf/verifier/test-stdout.txt",
+      "oh_runs": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h0-smoke/crack-7z-hash__2FXsYpf/agent/oh_runs"
+    }
+  }
+}

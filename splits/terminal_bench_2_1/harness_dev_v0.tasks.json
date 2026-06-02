@@ -1,0 +1,12 @@
+[
+  "crack-7z-hash",
+  "password-recovery",
+  "vulnerable-secret",
+  "fix-git",
+  "git-leak-recovery",
+  "sqlite-db-truncate",
+  "db-wal-recovery",
+  "regex-log",
+  "log-summary-date-ranges",
+  "configure-git-webserver"
+]
