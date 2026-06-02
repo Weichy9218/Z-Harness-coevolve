@@ -1,0 +1,126 @@
+# 04 下一步计划
+
+## 总结
+
+当前不要训练，也不要直接进入 10-task dev ablation。
+
+H2e 已经完成：reward `0.0`，无 infra exception，但 verifier 缺
+`/app/solution.txt`。这不是 H2c/H2d 那种 processor false positive invalid run；
+它是一次有效 gate failure。结论是：H2 的 guard 机制变干净了，但还不足以让
+`crack-7z-hash` 成功。下一步应先做 H3 failure-mechanism patch。
+
+## H0/H1/H2a/H2b/H2c/H2d/H2e 分别是什么
+
+| 名称 | 任务 | 用途 | 当前状态 |
+| --- | --- | --- | --- |
+| H0 | baseline HarnessX TB2 harness 跑 `crack-7z-hash` | 建立 M0 baseline failure，定位失败机制 | completed，reward `0.0` |
+| H1a | prompt-only apt recovery | 测只改 prompt 能否解决 stale apt / install recovery | invalid stopped |
+| H1b | strict apt install recovery processor | 只允许 real stale install failure 后做一次 `apt-get update` | diagnostic partial |
+| H2a | 第一版 tool-cost + brute-force guard | 阻止 heavy install 重复 timeout 和 unbounded brute force | invalid，暴露 false negative |
+| H2b | 修复 H2a 后再跑 | 允许 bounded probe，同时阻止 unbounded wordlist loop | invalid，暴露 false positive |
+| H2c | 修复 H2a/H2b 后的 real gate | 判断 H2 是否机制干净，能否进入 dev ablation | invalid，暴露 literal probe false positive |
+| H2d | 修复 H2c 后的 real gate | 判断 H2 是否机制干净，能否进入 dev ablation | invalid，暴露 hash-string false positive |
+| H2e | 修复 H2d 后的 real gate | 判断 H2 是否机制干净，能否进入 dev ablation | completed，reward `0.0` |
+
+关键解释：
+
+- H0 是有效失败，不是坏事；它给出了 artifact-backed baseline。
+- H1a/H2a/H2b/H2c/H2d 是 invalid diagnostic，不是最终失败。
+- H1b 证明 apt recovery 方向有用，但不够。
+- H2e 是有效 gate failure：它可以进入内部结果整理，但不能支持训练或 dev ablation。
+
+## H2e 为什么没有成功
+
+H2e artifact：
+
+```text
+/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2e-external-command-regex-crack-gate-20260602
+```
+
+结果：
+
+- reward `0.0`；
+- infra exceptions `0`；
+- verifier 失败原因：`/app/solution.txt` missing；
+- runtime `30m 41s`；
+- observed Bash calls `95`；
+- synthetic tool blocks `7`；
+- `AptInstallRecoveryProcessor` 触发 `2` 次；
+- `ToolTimeoutStrategyProcessor` 触发 `3` 次；
+- `SlowBruteforceGuardProcessor` 触发 `5` 次。
+
+解释：
+
+- H2e 没有复现 H2c/H2d 的误杀问题，所以它不是 invalid。
+- H2e 仍大量消耗步骤和 token，说明“允许 bounded probe + 阻止 unbounded brute force”
+  还不够。
+- 模型仍会在 build `john`、小规模 `7z` probe、工具安装/恢复之间反复尝试，最后没有
+  形成正确可验证答案。
+
+## H2e 复现命令
+
+`TB2_API_KEY` 来自 Z repo `.env` 里的 `apihy_API_KEY_deepseek`。
+
+```bash
+set -a
+source /Users/weichy/code/Z-Harness-coevolve/.env
+set +a
+
+PATH=/Users/weichy/code/HarnessX/.venv/bin:$PATH \
+TB2_MODEL=deepseek-v3.2 \
+TB2_API_BASE=https://zgc.apihy.com/v1 \
+TB2_API_KEY="$apihy_API_KEY_deepseek" \
+bash /Users/weichy/code/HarnessX/benchmarks/terminal_bench_2/scripts/eval_local_docker.sh \
+  -t crack-7z-hash \
+  --job-name tb2-1-h2e-external-command-regex-crack-gate-20260602 \
+  -n 1 \
+  --max-steps 100 \
+  --request-timeout-sec 600
+```
+
+## H3 建议
+
+H3 的目标不是“提示答案”，而是进一步约束无效工作流：
+
+1. 限制重复 bounded password probe：允许一次小 probe，但多次失败后必须切换策略或停止。
+2. 限制 repeated build/install loop：`john/hashcat` build 或 install 超时后，不能反复换目录重试。
+3. 增强 self-verify：如果最终没有 `/app/solution.txt`，在最后预算前必须写出候选或明确失败。
+4. 给 processor 加 regression tests，确保 H2c/H2d 修过的 false positive 不回归。
+
+H3 single-task gate 成功后，才跑 10-task same-split dev ablation。
+
+## dev ablation 条件
+
+只有 H3 或后续 gate clean 且有合理收益信号后才跑：
+
+1. H0/M0 dev split：从 pinned H0 HarnessX commit 或 clean H0 worktree 跑。
+2. H*/M0 dev split：从当前 H* HarnessX worktree 跑。
+3. 两边固定 model route、API base、sandbox、dev split、max steps、request timeout、concurrency。
+
+成功标准：
+
+- H*/M0 在 10-task dev split 上比 H0/M0 至少多 1 个 pass；
+- 没有不可解释的 H0 pass -> H* fail regression；
+- infra errors 不增加；
+- token/runtime/tool-call overhead 不超过 guardrail，除非有明确 pass gain。
+
+## dev ablation 后
+
+如果 H*/M0 成功：
+
+1. 冻结 H*；
+2. 记录 HarnessX exact commit 或 patch diff；
+3. 验证 dev split task metadata；
+4. 建立真实 train split，排除 dev tuning 和 heldout；
+5. 只收 accepted H* train trajectories；
+6. export sanitized SFT candidates；
+7. 做 leakage scan 和 sampled human review；
+8. 再准备 Qwen 8B SFT / LoRA；
+9. tau-bench 作为 transfer check。
+
+如果 H*/M0 失败：
+
+1. 不训练；
+2. 回到 failure taxonomy；
+3. 判断是 H2 policy 无效、task cluster 太窄、还是 runtime/env 问题；
+4. 设计 H3 或回滚到 H1b/H0。

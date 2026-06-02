@@ -118,17 +118,61 @@
       "notes": "Stopped after guard incorrectly blocked a small literal candidate loop; fixed by bounded literal-loop regression tests."
     },
     {
-      "entry_id": "h2c_tool_cost_crack_gate_prepared",
+      "entry_id": "h2c_tool_cost_crack_gate",
       "harness_variant": "H2c",
       "split": "dev_tuning",
-      "status": "prepared_not_run",
+      "status": "invalid_stopped",
       "accepted_for_training": false,
       "task_name": "terminal-bench/crack-7z-hash",
       "job_name": "tb2-1-h2c-tool-cost-crack-gate-20260602",
       "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2c-tool-cost-crack-gate-20260602",
-      "trial_result": "",
-      "failure_taxonomy": [],
-      "notes": "Dry-run passed. Real run requires TB2_API_KEY in the execution shell."
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2c-tool-cost-crack-gate-20260602/crack-7z-hash__DhZBScD/result.json",
+      "failure_taxonomy": [
+        "invalid_gate",
+        "slow_bruteforce_guard_false_positive",
+        "literal_probe_with_cat"
+      ],
+      "notes": "Stopped after a small literal 7z probe was incorrectly blocked because cat in the success branch matched the strong wordlist-source heuristic."
+    },
+    {
+      "entry_id": "h2d_literal_probe_crack_gate",
+      "harness_variant": "H2d",
+      "split": "dev_tuning",
+      "status": "invalid_stopped",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h2d-literal-probe-crack-gate-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2d-literal-probe-crack-gate-20260602",
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2d-literal-probe-crack-gate-20260602/crack-7z-hash__nHgcJJZ/result.json",
+      "failure_taxonomy": [
+        "invalid_gate",
+        "slow_bruteforce_guard_false_positive",
+        "hash_string_7z_false_positive"
+      ],
+      "notes": "Stopped after Python code that parsed a $7z$ hash string was incorrectly treated as an external 7z command."
+    },
+    {
+      "entry_id": "h2e_external_command_regex_crack_gate",
+      "harness_variant": "H2e",
+      "split": "dev_tuning",
+      "status": "completed",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h2e-external-command-regex-crack-gate-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2e-external-command-regex-crack-gate-20260602",
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h2e-external-command-regex-crack-gate-20260602/crack-7z-hash__EY23G3b/result.json",
+      "summary_artifact": "artifacts/tb2_1_harness_only/h2e_summary.json",
+      "reward": 0.0,
+      "runtime_seconds": 1839.456,
+      "observed_assistant_steps": 96,
+      "observed_bash_tool_calls": 95,
+      "synthetic_tool_blocks": 7,
+      "failure_taxonomy": [
+        "valid_gate_failure",
+        "missing_solution_file",
+        "repeated_probe_and_build_loop"
+      ],
+      "notes": "Clean completed gate with no infra exception. Verifier failed because /app/solution.txt was missing; H2 processors intervened but did not make the task pass."
     }
   ]
 }

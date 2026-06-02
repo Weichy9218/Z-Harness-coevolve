@@ -1,132 +1,84 @@
 # Z-Harness-coevolve
 
-研究目标：把 agent 成功经验分配到正确位置。一次 scaffold / skill 帮助模型解决隐藏规则任务后，需要判断哪些经验应该留在 harness/skill，哪些可以 distill 到 weights，哪些必须 quarantine/forget。
+这个 repo 是 HarnessX benchmark 复现实验的 controller。当前核心不是
+MiniLang，也不是直接训练模型，而是：
 
-当前判断：不要先做 Hanabi -> Terminal-Bench 2，也不要先写完整 co-evolve 大系统。v0 先在可控、可验证、可做 counterfactual 的 MiniLang / MiniAPI 中打穿三个问题：
+1. 在 HarnessX 上复现 Terminal-Bench 2.1；
+2. 验证 H0/H1/H2 这些 harness-only 改动是否真的有效；
+3. TB2 稳定后，再做 tau-bench / tau3-bench transfer；
+4. 只有 accepted successful train trajectories 才能进入后续 SFT / LoRA / GRPO。
 
-1. **Scaffold headroom**：scaffold 是否真的降低 learning cost。
-2. **Trace abstraction**：stripped trace 是否比 raw trace 更能迁移、更少泄漏。
-3. **Adoption causality**：adoption signal 是否能预测 skill / harness item 的 causal usefulness。
+`zharness/envs/minilang/` 可以保留历史代码和结果，但不再作为当前主线。
 
-如果这三项至少两项成立，再进入 SFT / verl / GRPO / AppWorld / Terminal-Bench 2。否则先修环境、trace abstraction 或 skill routing，不急着烧 8 张 A100。
+## 当前状态
 
-## Scientific Contract
+不要训练。
 
-核心对象是 experience allocation：`K_spec` quarantine，`K_gen` 进入 skill/harness，真正泛化的 `theta` 才能进入 weights。完整判据和 daily checkpoint 只维护在 [docs/EXPERIMENT_PLAN.md](docs/EXPERIMENT_PLAN.md)。
+最近 gate 是 Terminal-Bench 2.1 的 H2e：
 
-## Current Evidence
+- substrate: `/Users/weichy/code/HarnessX`
+- controller: `/Users/weichy/code/Z-Harness-coevolve`
+- benchmark: `terminal-bench/terminal-bench-2-1`
+- model: `deepseek-v3.2`
+- API base: `https://zgc.apihy.com/v1`
+- sandbox: HarnessX local Docker / `DinDDockerEnvironment`, `network_mode=host`
 
-MiniLang hard mode 已经有 scaffold headroom，Day 2 leakage smoke 也支持当前 measurement：`renamed_vocab` 会让 source raw K_spec 崩掉，而 target scaffold 恢复；`order_swap` 主要影响 generation，说明 parse/generate 必须分开报。
+`TB2_API_KEY` 是模型接口 key，来自本 repo `.env` 里的
+`apihy_API_KEY_deepseek`。它不是 Terminal-Bench 数据集 key，不能提交。
 
-具体表格只维护在 result archive，避免 README 和 docs 漂移：
+H2e 已完成：reward `0.0`，无 infra exception，但 verifier 缺
+`/app/solution.txt`。它不是 invalid run；它说明 H2 guard 机制已经比 H2c/H2d
+干净，但还不足以让 `crack-7z-hash` 成功。当前下一步是 H3 failure-mechanism
+patch，而不是直接训练或扩跑 dev ablation。
 
-- [Day 1 scaffold headroom](docs/result/DAY1_RESULT.md)
-- [Day 2 leakage eval](docs/result/DAY2_LEAKAGE_RESULT.md)
-- [Day 3 stronger leakage transforms](docs/result/DAY3_LEAKAGE_RESULT.md)
-- [Day 4-6 API-only trace/proxy/adoption report](docs/result/DAY4_DAY6_API_REPORT.md)
-- [Executable K_gen headroom repair](docs/result/KGEN_EXEC_HEADROOM_RESULT.md)
-- [Model and environment notes](docs/MODEL_AND_ENV_REVISIONS.md)
+## 文档结构
 
-## Quick Start
+docs 只保留 4 个方向：
 
-`.env` 已从 `galaxy-selfevolve` 复制到本 repo 根目录，但被 `.gitignore` 排除，不会提交。
+- [系统架构](docs/01_SYSTEM_ARCHITECTURE.md)：目标、repo 分工、当前方法、运行环境。
+- [相关工作](docs/02_RELATED_WORK.md)：SIA、Meta-Harness、Harness-Bench、Terminal-Bench、tau-bench、verl 的关系。
+- [数据集与结果](docs/03_BENCHMARKS_AND_RESULTS.md)：benchmark、split、H0/H1/H2 当前结果、export 状态。
+- [下一步计划](docs/04_NEXT_PLAN.md)：H0/H1/H2a/H2b/H2c/H2d/H2e 的定义、用途、成功标准和后续路线。
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
-```
-
-Deterministic smoke test：
-
-```bash
-python -m pytest
-python -m zharness.eval.run_headroom --episodes 2 --mock-policy oracle
-```
-
-API smoke：
+## H2e 复现命令
 
 ```bash
-python scripts/check_llm.py \
-  --client openrouter_newapi \
-  --model deepseek-v3.2 \
-  --api-key-env apihy_API_KEY_deepseek \
-  --base-url-env apihy_BASE_URL \
-  --reasoning-effort none
+set -a
+source /Users/weichy/code/Z-Harness-coevolve/.env
+set +a
+
+PATH=/Users/weichy/code/HarnessX/.venv/bin:$PATH \
+TB2_MODEL=deepseek-v3.2 \
+TB2_API_BASE=https://zgc.apihy.com/v1 \
+TB2_API_KEY="$apihy_API_KEY_deepseek" \
+bash /Users/weichy/code/HarnessX/benchmarks/terminal_bench_2/scripts/eval_local_docker.sh \
+  -t crack-7z-hash \
+  --job-name tb2-1-h2e-external-command-regex-crack-gate-20260602 \
+  -n 1 \
+  --max-steps 100 \
+  --request-timeout-sec 600
 ```
 
-主线 hard-mode headroom sweep：
+当前进入 dev ablation 的标准：
+
+- H3 或后续 gate 至少给出 clean pass 或明确的收益信号；
+- 没有 processor false positive / false negative；
+- 再用同一 model route 和同一 split 跑 H0/M0 vs H*/M0。
+
+## 本地检查
+
+Z repo：
 
 ```bash
-python -m zharness.eval.run_headroom \
-  --episodes 8 \
-  --difficulty hard \
-  --support-budget 8 \
-  --client openrouter_newapi \
-  --model deepseek-v3.2 \
-  --api-key-env apihy_API_KEY_deepseek \
-  --base-url-env apihy_BASE_URL \
-  --reasoning-effort none \
-  --conditions no_scaffold,k_spec,k_gen,k_spec_k_gen
+/Users/weichy/code/Z-Harness-coevolve/.venv/bin/python -m pytest -q
 ```
 
-Counterfactual leakage sweep：
+HarnessX targeted tests：
 
 ```bash
-python -m zharness.eval.run_leakage \
-  --episodes 8 \
-  --difficulty hard \
-  --support-budget 8 \
-  --client openrouter_newapi \
-  --model deepseek-v3.2 \
-  --api-key-env apihy_API_KEY_deepseek \
-  --base-url-env apihy_BASE_URL \
-  --reasoning-effort none \
-  --transforms renamed_vocab,order_swap,composition_swap,heldout_family
+PATH=/Users/weichy/code/HarnessX/.venv/bin:$PATH \
+/Users/weichy/code/HarnessX/.venv/bin/python -m pytest \
+  tests/unit/test_harness_config_hydra.py \
+  tests/unit/test_tb2_harness_processors.py \
+  -q
 ```
-
-Qwen through apihy needs visible thinking disabled:
-
-```bash
-python -m zharness.eval.run_headroom \
-  --episodes 1 \
-  --difficulty hard \
-  --client openrouter_newapi \
-  --model qwen3.5-27b \
-  --api-key-env apihy_API_KEY_qwen \
-  --base-url-env apihy_BASE_URL \
-  --max-tokens 1024 \
-  --extra-body-json '{"enable_thinking": false}'
-```
-
-Run artifacts are written under `runs/`.
-
-## Documentation Map
-
-- [docs/EXPERIMENT_PLAN.md](docs/EXPERIMENT_PLAN.md)：paper-facing scientific plan, metrics, falsifiers, stage gates.
-- [docs/TRAINING_PLAN.md](docs/TRAINING_PLAN.md)：SFT / verl / GRPO plan for the 8xA100 server phase.
-- [docs/RELATED_EXPERIMENTS.md](docs/RELATED_EXPERIMENTS.md)：SAGE、Meta-Harness、SIA、Harness-Bench、AppWorld、tau-bench、Terminal-Bench 2、verl 的定位。
-- [docs/MODEL_AND_ENV_REVISIONS.md](docs/MODEL_AND_ENV_REVISIONS.md)：model routing and MiniLang environment notes.
-- [docs/result/](docs/result/)：daily factual result archives.
-
-## Project Layout
-
-```text
-core/llm/                    # copied from galaxy-selfevolve
-docs/                        # experiment design, training route, related work, result notes
-zharness/envs/minilang/      # synthetic hidden-rule language environment
-zharness/agents/             # LLM wrappers, prompts, answer parsing
-zharness/eval/               # runnable evaluation scripts
-scripts/check_llm.py         # API smoke check
-tests/                       # deterministic tests
-```
-
-## Scope Control
-
-v0 is intentionally no-training and API-only. The first deliverable is not a big self-improving system; it is a clean measurement protocol showing that:
-
-1. `K_spec` gives real headroom.
-2. Counterfactual transforms catch leakage.
-3. Robust adoption correlates with counterfactual removal delta.
-
-Training starts only after trace quality and leakage tests are stable. The server phase should support both SFT and verl, but raw trace SFT is a control arm, not the intended method.
