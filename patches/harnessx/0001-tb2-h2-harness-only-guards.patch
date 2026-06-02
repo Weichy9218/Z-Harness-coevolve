@@ -1,0 +1,798 @@
+From 4143465d52a2ebba6acbf7d883c086fcef5eb86e Mon Sep 17 00:00:00 2001
+From: Weichy9218 <weichy2023@163.com>
+Date: Tue, 2 Jun 2026 13:26:09 +0800
+Subject: [PATCH] Add TB2 harness-only H2 guards
+
+---
+ benchmarks/terminal_bench_2/harness.py        | 262 +++++++++++-
+ .../scripts/eval_local_docker.sh              |  22 +-
+ .../scripts/eval_opensandbox.sh               |  36 +-
+ tests/unit/test_tb2_harness_processors.py     | 401 ++++++++++++++++++
+ 4 files changed, 702 insertions(+), 19 deletions(-)
+ create mode 100644 tests/unit/test_tb2_harness_processors.py
+
+diff --git a/benchmarks/terminal_bench_2/harness.py b/benchmarks/terminal_bench_2/harness.py
+index fc5c0aa..327a8c2 100644
+--- a/benchmarks/terminal_bench_2/harness.py
++++ b/benchmarks/terminal_bench_2/harness.py
+@@ -20,6 +20,7 @@ from __future__ import annotations
+ 
+ import dataclasses
+ import re
++import shlex
+ import time
+ import uuid
+ 
+@@ -75,6 +76,92 @@ _EDIT_LIMIT_WARN = (
+     "You are over-editing this file — step back and try a fundamentally different approach."
+ )
+ 
++_APT_INSTALL_RE = re.compile(r"\bapt-get\s+install\b")
++_APT_UPDATE_RE = re.compile(r"\bapt-get\s+update\b")
++_APT_STALE_FAILURE_RE = re.compile(
++    r"(404\s+Not\s+Found|Unable\s+to\s+fetch\s+some\s+archives|Hash\s+Sum\s+mismatch|"
++    r"Release\s+file.*expired|repository.*no\s+longer\s+has\s+a\s+Release\s+file)",
++    re.IGNORECASE | re.DOTALL,
++)
++_APT_INSTALL_RECOVERY_HINT = (
++    "\n\n[AptInstallRecovery] This `apt-get install` failure looks like stale package metadata. "
++    "You may run exactly one synchronous `apt-get update`, then retry the same install. "
++    "Do not run `apt-get update` preemptively, do not loop on it, and if the retry fails, "
++    "continue with another valid approach."
++)
++_APT_UPDATE_BLOCKED = (
++    "[AptInstallRecovery] `apt-get update` is blocked until a direct `apt-get install` fails "
++    "with stale package metadata, 404s, hash mismatches, or `Unable to fetch`. "
++    "Try the install directly first. If it already failed with that error, retry with one "
++    "synchronous `apt-get update` and then the same install."
++)
++
++_TOOL_TIMEOUT_RE = re.compile(r"Command timed out after\s+\d+\s+seconds", re.IGNORECASE)
++_HEAVY_INSTALL_RE = re.compile(
++    r"\b(?:apt-get\s+install|apt\s+install|pip3?\s+install|python3?\s+-m\s+pip\s+install|"
++    r"uv\s+pip\s+install|cargo\s+install|make\b)",
++    re.IGNORECASE,
++)
++_TOOL_TIMEOUT_HINT = (
++    "\n\n[ToolTimeoutStrategy] This heavy install/build command timed out. "
++    "Do not repeat the same command with the default Bash timeout. "
++    "If this tool is essential, retry once with Bash timeout=600000 and a brief reason; "
++    "otherwise abandon this path and choose a lighter strategy. "
++    "In either case, do not fall back to unbounded brute force."
++)
++_TOOL_TIMEOUT_BLOCKED = (
++    "[ToolTimeoutStrategy] This heavy install/build command already timed out. "
++    "Do not retry it with the default Bash timeout. If it is essential, retry once with Bash timeout=600000; "
++    "otherwise abandon this path and choose a lighter strategy."
++)
++
++_WORDLIST_RE = re.compile(r"\b(?:wordlist|passwords?|password\.lst|rockyou|dictionary|dict)\b", re.IGNORECASE)
++_EXTERNAL_BRUTE_RE = re.compile(
++    r"\b(?:7z|7za|zip|unzip|rar|unrar|openssl|gpg|hashcat|john)\b|subprocess\.run|os\.system|popen",
++    re.IGNORECASE,
++)
++_LOOP_RE = re.compile(r"\b(?:for|while)\b|for\s+\w+\s+in\s+\w+|enumerate\s*\(", re.IGNORECASE)
++_BOUNDED_BRUTE_RE = re.compile(
++    r"\b(?:head\s+-n?\s*\d+|timeout\s+\d+|counter\s*[<]=?\s*\d+|count\s*[<]=?\s*\d+|"
++    r"range\s*\(\s*\d+\s*\)|islice\s*\()",
++    re.IGNORECASE,
++)
++_STRONG_WORDLIST_SOURCE_RE = re.compile(
++    r"\b(?:password\.lst|rockyou|wordlists?|dictionary|dict)\b|open\s*\(|\bcat\s+",
++    re.IGNORECASE,
++)
++_LITERAL_FOR_IN_RE = re.compile(r"\bfor\s+\w+\s+in\s+([^;\n]+)(?:;|\n)\s*do\b", re.IGNORECASE)
++_LITERAL_FOR_IN_UNSAFE_RE = re.compile(r"[$`*?{}\[\]<>|/&]")
++_LITERAL_FOR_IN_MAX_CANDIDATES = 32
++_SLOW_BRUTEFORCE_BLOCKED = (
++    "[SlowBruteforceGuard] This looks like an unbounded wordlist loop that runs an external command "
++    "for each candidate. Estimate the cost first, run only a bounded sample, or switch to a specialized "
++    "tool/algorithm. Do not spend the task budget on unbounded brute force."
++)
++
++
++def _has_bounded_bruteforce_probe(command: str) -> bool:
++    if _BOUNDED_BRUTE_RE.search(command):
++        return True
++
++    if _STRONG_WORDLIST_SOURCE_RE.search(command):
++        return False
++
++    for match in _LITERAL_FOR_IN_RE.finditer(command):
++        literal_source = match.group(1).strip()
++        if not literal_source or _LITERAL_FOR_IN_UNSAFE_RE.search(literal_source):
++            continue
++
++        try:
++            candidates = shlex.split(literal_source)
++        except ValueError:
++            continue
++
++        if 0 < len(candidates) <= _LITERAL_FOR_IN_MAX_CANDIDATES:
++            return True
++
++    return False
++
+ 
+ _SELF_VERIFY_TOOL = "_tb2_self_verify"
+ _SELF_VERIFY_ACK = "Verification check initiated. See the message above for instructions."
+@@ -205,6 +292,175 @@ class CustomEditToolProcessor(MultiHookProcessor):
+         yield event
+ 
+ 
++class AptInstallRecoveryProcessor(MultiHookProcessor):
++    """Gate apt metadata refreshes behind a real stale-index install failure.
++
++    The TB2 prompt discourages wasteful ``apt-get update`` calls, but stale apt
++    indexes are a real sandbox failure mode.  This processor keeps the common
++    path unchanged, blocks preemptive updates, and only relaxes the policy once
++    after an observed install error.
++    """
++
++    _singleton_group = "tb2_apt_install_recovery"
++    _order = 31
++
++    def __init__(self) -> None:
++        self._pending_install_calls: set[str] = set()
++        self._hint_used = False
++        self._update_allowed = False
++        self._update_used = False
++
++    async def on_task_start(self, event: TaskStartEvent):
++        self._pending_install_calls.clear()
++        self._hint_used = False
++        self._update_allowed = False
++        self._update_used = False
++        yield event
++
++    async def on_before_tool(self, event: ToolCallEvent):
++        if event.tool_name == "Bash":
++            command = event.tool_input.get("command", "")
++            if not isinstance(command, str):
++                yield event
++                return
++            has_update = _APT_UPDATE_RE.search(command)
++            has_install = _APT_INSTALL_RE.search(command)
++            if has_update:
++                if self._update_allowed and not self._update_used:
++                    self._update_allowed = False
++                    self._update_used = True
++                else:
++                    yield dataclasses.replace(event, approved=False, synthetic_result=_APT_UPDATE_BLOCKED)
++                    return
++            if has_install:
++                self._pending_install_calls.add(event.tool_call_id)
++        yield event
++
++    async def on_after_tool(self, event: ToolResultEvent):
++        is_tracked_install = event.tool_call_id in self._pending_install_calls
++        self._pending_install_calls.discard(event.tool_call_id)
++        if not is_tracked_install or self._hint_used:
++            yield event
++            return
++
++        output = "\n".join(part for part in (event.result or "", event.error or "") if part)
++        if _APT_STALE_FAILURE_RE.search(output):
++            self._hint_used = True
++            self._update_allowed = True
++            yield dataclasses.replace(event, result=(event.result or "") + _APT_INSTALL_RECOVERY_HINT)
++        else:
++            yield event
++
++    async def on_task_end(self, event: TaskEndEvent):
++        self._pending_install_calls.clear()
++        self._hint_used = False
++        self._update_allowed = False
++        self._update_used = False
++        yield event
++
++
++def _normalized_heavy_command(command: str) -> str:
++    """Normalize a heavy install/build command enough to detect exact retries."""
++    return re.sub(r"\s+", " ", command.strip())
++
++
++class ToolTimeoutStrategyProcessor(MultiHookProcessor):
++    """Nudge away from repeated heavy commands after a tool timeout.
++
++    This processor does not make tools faster and does not solve any task.  It
++    only turns an observed timeout into a bounded retry policy so the model does
++    not burn the remaining budget repeating the same install/build or falling
++    back to unbounded brute force.
++    """
++
++    _singleton_group = "tb2_tool_timeout_strategy"
++    _order = 32
++
++    def __init__(self) -> None:
++        self._pending_commands: dict[str, str] = {}
++        self._timed_out_heavy_commands: set[str] = set()
++        self._long_retry_used: set[str] = set()
++
++    async def on_task_start(self, event: TaskStartEvent):
++        self._pending_commands.clear()
++        self._timed_out_heavy_commands.clear()
++        self._long_retry_used.clear()
++        yield event
++
++    async def on_before_tool(self, event: ToolCallEvent):
++        if event.tool_name != "Bash":
++            yield event
++            return
++
++        command = event.tool_input.get("command", "")
++        if not isinstance(command, str):
++            yield event
++            return
++
++        key = _normalized_heavy_command(command)
++        is_heavy = bool(_HEAVY_INSTALL_RE.search(command))
++        if is_heavy and key in self._timed_out_heavy_commands:
++            timeout = event.tool_input.get("timeout")
++            timeout_ms = int(timeout) if isinstance(timeout, int | str) and str(timeout).isdigit() else 0
++            if timeout_ms >= 600000 and key not in self._long_retry_used:
++                self._long_retry_used.add(key)
++            else:
++                yield dataclasses.replace(event, approved=False, synthetic_result=_TOOL_TIMEOUT_BLOCKED)
++                return
++
++        self._pending_commands[event.tool_call_id] = command
++        yield event
++
++    async def on_after_tool(self, event: ToolResultEvent):
++        command = self._pending_commands.pop(event.tool_call_id, "")
++        output = "\n".join(part for part in (event.result or "", event.error or "") if part)
++        if command and _HEAVY_INSTALL_RE.search(command) and _TOOL_TIMEOUT_RE.search(output):
++            self._timed_out_heavy_commands.add(_normalized_heavy_command(command))
++            yield dataclasses.replace(event, result=(event.result or "") + _TOOL_TIMEOUT_HINT)
++        else:
++            yield event
++
++    async def on_task_end(self, event: TaskEndEvent):
++        self._pending_commands.clear()
++        self._timed_out_heavy_commands.clear()
++        self._long_retry_used.clear()
++        yield event
++
++
++class SlowBruteforceGuardProcessor(MultiHookProcessor):
++    """Block obvious unbounded wordlist × external-command brute force loops."""
++
++    _singleton_group = "tb2_slow_bruteforce_guard"
++    _order = 33
++
++    async def on_task_start(self, event: TaskStartEvent):
++        yield event
++
++    async def on_before_tool(self, event: ToolCallEvent):
++        if event.tool_name != "Bash":
++            yield event
++            return
++
++        command = event.tool_input.get("command", "")
++        if not isinstance(command, str):
++            yield event
++            return
++
++        if (
++            _WORDLIST_RE.search(command)
++            and _LOOP_RE.search(command)
++            and _EXTERNAL_BRUTE_RE.search(command)
++            and not _has_bounded_bruteforce_probe(command)
++        ):
++            yield dataclasses.replace(event, approved=False, synthetic_result=_SLOW_BRUTEFORCE_BLOCKED)
++            return
++
++        yield event
++
++    async def on_task_end(self, event: TaskEndEvent):
++        yield event
++
++
+ # ---------------------------------------------------------------------------
+ # TaskTimeReminderProcessor
+ # ---------------------------------------------------------------------------
+@@ -384,7 +640,8 @@ You are an expert software engineer solving terminal-based programming tasks in
+    sleep 1 && curl -sf http://localhost:8080/health
+ ```
+ 8. **Do not use unbounded background commands.** If a command's runtime is unpredictable, run it synchronously. Only use `&` / `nohup` for long-running services the verifier will connect to.
+-9. **Do not run `apt-get update`.** Package lists are pre-cached — `apt-get install -y <pkg>` works directly and completes in seconds.
++9. **Prefer direct package installs.** Try `apt-get install -y <pkg>` directly first; package lists are usually pre-cached and this completes in seconds. Do not run `apt-get update` preemptively; the harness may block it. If an `apt-get install` fails with stale package metadata, 404s, hash mismatches, or "Unable to fetch", run one synchronous `apt-get update`, then retry the same install once.
++10. **Bound expensive search.** Before running a wordlist, brute-force, or batch command, estimate its cost. Use a small bounded sample first. Do not run an unbounded loop that invokes an external command once per candidate.
+ 
+ ## Definition of Done
+ - All required output files exist at the exact paths specified in the task — confirmed with `ls`
+@@ -460,6 +717,9 @@ def make_tb2_harness_config(
+         .add(ToolCallCorrectionLayer())
+         .add(ParseRetryProcessor())
+         .add(BgInstallGuard())
++        .add(AptInstallRecoveryProcessor())
++        .add(ToolTimeoutStrategyProcessor())
++        .add(SlowBruteforceGuardProcessor())
+         .add(CustomEditToolProcessor())
+         .add(CustomSelfVerifyProcessor())
+         .slot(tool_registry=_build_tb2_tools())
+diff --git a/benchmarks/terminal_bench_2/scripts/eval_local_docker.sh b/benchmarks/terminal_bench_2/scripts/eval_local_docker.sh
+index 9a0d7c3..891dddf 100755
+--- a/benchmarks/terminal_bench_2/scripts/eval_local_docker.sh
++++ b/benchmarks/terminal_bench_2/scripts/eval_local_docker.sh
+@@ -97,10 +97,18 @@ PYEOF
+ fi
+ 
+ # ── Launch tb2_eval.py ────────────────────────────────────────────────────────
+-exec python "$SCRIPT_DIR/tb2_eval.py" \
+-  --env docker \
+-  -m "$TB2_MODEL" \
+-  -k "$TB2_API_KEY" \
+-  -b "$TB2_API_BASE" \
+-  "${TASK_ARGS[@]}" \
+-  "${PASSTHROUGH_ARGS[@]}"
++CMD=(
++  python "$SCRIPT_DIR/tb2_eval.py"
++  --env docker
++  -m "$TB2_MODEL"
++  -k "$TB2_API_KEY"
++  -b "$TB2_API_BASE"
++)
++if ((${#TASK_ARGS[@]})); then
++  CMD+=("${TASK_ARGS[@]}")
++fi
++if ((${#PASSTHROUGH_ARGS[@]})); then
++  CMD+=("${PASSTHROUGH_ARGS[@]}")
++fi
++
++exec "${CMD[@]}"
+diff --git a/benchmarks/terminal_bench_2/scripts/eval_opensandbox.sh b/benchmarks/terminal_bench_2/scripts/eval_opensandbox.sh
+index 5fde12f..3e5ae44 100644
+--- a/benchmarks/terminal_bench_2/scripts/eval_opensandbox.sh
++++ b/benchmarks/terminal_bench_2/scripts/eval_opensandbox.sh
+@@ -128,14 +128,28 @@ PYEOF
+ fi
+ 
+ # ── Launch tb2_eval.py ────────────────────────────────────────────────────────
+-exec python "$SCRIPT_DIR/tb2_eval.py" \
+-  --env opensandbox \
+-  --sandbox-url "$OPENSANDBOX_URL" \
+-  "${PROXY_ARGS[@]}" \
+-  "${NO_PROXY_ARGS[@]}" \
+-  -m "$MODEL" \
+-  -k "$ANTHROPIC_API_KEY" \
+-  -b "$ANTHROPIC_API_BASE" \
+-  -n 1 \
+-  "${TASK_ARGS[@]}" \
+-  "${PASSTHROUGH_ARGS[@]}"
++CMD=(
++  python "$SCRIPT_DIR/tb2_eval.py"
++  --env opensandbox
++  --sandbox-url "$OPENSANDBOX_URL"
++)
++if ((${#PROXY_ARGS[@]})); then
++  CMD+=("${PROXY_ARGS[@]}")
++fi
++if ((${#NO_PROXY_ARGS[@]})); then
++  CMD+=("${NO_PROXY_ARGS[@]}")
++fi
++CMD+=(
++  -m "$MODEL"
++  -k "$ANTHROPIC_API_KEY"
++  -b "$ANTHROPIC_API_BASE"
++  -n 1
++)
++if ((${#TASK_ARGS[@]})); then
++  CMD+=("${TASK_ARGS[@]}")
++fi
++if ((${#PASSTHROUGH_ARGS[@]})); then
++  CMD+=("${PASSTHROUGH_ARGS[@]}")
++fi
++
++exec "${CMD[@]}"
+diff --git a/tests/unit/test_tb2_harness_processors.py b/tests/unit/test_tb2_harness_processors.py
+new file mode 100644
+index 0000000..d97bf64
+--- /dev/null
++++ b/tests/unit/test_tb2_harness_processors.py
+@@ -0,0 +1,401 @@
++# Copyright 2026 Darwin-Agent
++# SPDX-License-Identifier: MIT
++from __future__ import annotations
++
++from benchmarks.terminal_bench_2.harness import (
++    AptInstallRecoveryProcessor,
++    SlowBruteforceGuardProcessor,
++    ToolTimeoutStrategyProcessor,
++)
++from harnessx.core.events import TaskStartEvent, ToolCallEvent, ToolResultEvent
++
++
++async def _collect(async_iter):
++    return [event async for event in async_iter]
++
++
++async def test_apt_install_recovery_hint_on_stale_install_failure():
++    processor = AptInstallRecoveryProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="install-1",
++                tool_input={"command": "apt-get install -y hashcat"},
++            )
++        )
++    )
++    events = await _collect(
++        processor.on_after_tool(
++            ToolResultEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="install-1",
++                result="E: Failed to fetch http://example/hashcat.deb  404  Not Found\n"
++                "E: Unable to fetch some archives, maybe run apt-get update",
++            )
++        )
++    )
++
++    assert len(events) == 1
++    assert "AptInstallRecovery" in events[0].result
++    assert "apt-get update" in events[0].result
++    assert "retry the same install" in events[0].result
++
++
++async def test_apt_install_recovery_blocks_preemptive_update():
++    processor = AptInstallRecoveryProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    events = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="update-1",
++                tool_input={"command": "apt-get update && apt-get install -y hashcat"},
++            )
++        )
++    )
++
++    assert len(events) == 1
++    assert not events[0].approved
++    assert "AptInstallRecovery" in (events[0].synthetic_result or "")
++    assert "Try the install directly first" in (events[0].synthetic_result or "")
++
++
++async def test_apt_install_recovery_allows_one_update_after_stale_failure():
++    processor = AptInstallRecoveryProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="install-1",
++                tool_input={"command": "apt-get install -y hashcat"},
++            )
++        )
++    )
++    await _collect(
++        processor.on_after_tool(
++            ToolResultEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="install-1",
++                result="E: Unable to fetch some archives, maybe run apt-get update",
++            )
++        )
++    )
++
++    first_update = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=2,
++                tool_name="Bash",
++                tool_call_id="update-1",
++                tool_input={"command": "apt-get update"},
++            )
++        )
++    )
++    second_update = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=3,
++                tool_name="Bash",
++                tool_call_id="update-2",
++                tool_input={"command": "apt-get update"},
++            )
++        )
++    )
++
++    assert first_update[0].approved
++    assert second_update[0].approved is False
++
++
++async def test_apt_install_recovery_hint_is_one_shot_per_task():
++    processor = AptInstallRecoveryProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    for idx in range(2):
++        call_id = f"install-{idx}"
++        await _collect(
++            processor.on_before_tool(
++                ToolCallEvent(
++                    run_id="r",
++                    step_id=idx,
++                    tool_name="Bash",
++                    tool_call_id=call_id,
++                    tool_input={"command": "apt-get install -y hashcat"},
++                )
++            )
++        )
++        events = await _collect(
++            processor.on_after_tool(
++                ToolResultEvent(
++                    run_id="r",
++                    step_id=idx,
++                    tool_name="Bash",
++                    tool_call_id=call_id,
++                    result="E: Unable to fetch some archives, maybe run apt-get update",
++                )
++            )
++        )
++        hint_count = events[0].result.count("AptInstallRecovery")
++        if idx == 0:
++            assert hint_count == 1
++        else:
++            assert hint_count == 0
++
++
++async def test_apt_install_recovery_ignores_non_apt_commands():
++    processor = AptInstallRecoveryProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="grep-1",
++                tool_input={"command": "grep -R password /app"},
++            )
++        )
++    )
++    events = await _collect(
++        processor.on_after_tool(
++            ToolResultEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="grep-1",
++                result="E: Unable to fetch some archives, maybe run apt-get update",
++            )
++        )
++    )
++
++    assert events[0].result == "E: Unable to fetch some archives, maybe run apt-get update"
++
++
++async def test_tool_timeout_strategy_warns_on_heavy_install_timeout():
++    processor = ToolTimeoutStrategyProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="install-1",
++                tool_input={"command": "apt-get install -y hashcat"},
++            )
++        )
++    )
++    events = await _collect(
++        processor.on_after_tool(
++            ToolResultEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="install-1",
++                result="Error: Command timed out after 120 seconds",
++            )
++        )
++    )
++
++    assert "ToolTimeoutStrategy" in events[0].result
++    assert "Bash timeout=600000" in events[0].result
++    assert "do not fall back to unbounded brute force" in events[0].result
++
++
++async def test_tool_timeout_strategy_blocks_default_timeout_retry_after_heavy_install_timeout():
++    processor = ToolTimeoutStrategyProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="install-1",
++                tool_input={"command": "apt-get install -y hashcat"},
++            )
++        )
++    )
++    await _collect(
++        processor.on_after_tool(
++            ToolResultEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="install-1",
++                result="Error: Command timed out after 120 seconds",
++            )
++        )
++    )
++
++    blocked_retry = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=2,
++                tool_name="Bash",
++                tool_call_id="install-2",
++                tool_input={"command": "apt-get install -y hashcat"},
++            )
++        )
++    )
++    long_retry = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=3,
++                tool_name="Bash",
++                tool_call_id="install-3",
++                tool_input={"command": "apt-get install -y hashcat", "timeout": 600000},
++            )
++        )
++    )
++
++    assert blocked_retry[0].approved is False
++    assert "retry once with Bash timeout=600000" in (blocked_retry[0].synthetic_result or "")
++    assert long_retry[0].approved
++
++
++async def test_slow_bruteforce_guard_blocks_unbounded_wordlist_external_loop():
++    processor = SlowBruteforceGuardProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    command = """
++python3 -c "
++import subprocess
++with open('/app/john/run/password.lst') as f:
++    passwords = [line.strip() for line in f]
++for pwd in passwords:
++    subprocess.run(['7z', 't', '-p' + pwd, '/app/secrets.7z'])
++"
++"""
++    events = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="brute-1",
++                tool_input={"command": command},
++            )
++        )
++    )
++
++    assert events[0].approved is False
++    assert "SlowBruteforceGuard" in (events[0].synthetic_result or "")
++    assert "unbounded wordlist" in (events[0].synthetic_result or "")
++
++
++async def test_slow_bruteforce_guard_blocks_preview_slice_that_does_not_bound_loop():
++    processor = SlowBruteforceGuardProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    command = """
++python3 -c "
++import subprocess
++with open('/app/john/run/password.lst', 'r', encoding='latin-1') as f:
++    passwords = [line.strip() for line in f if line.strip()]
++for i, password in enumerate(passwords):
++    print(password[:20])
++    subprocess.run(['7z', 'x', '-p' + password, '/app/secrets.7z'])
++"
++"""
++    events = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="brute-1",
++                tool_input={"command": command},
++            )
++        )
++    )
++
++    assert events[0].approved is False
++    assert "SlowBruteforceGuard" in (events[0].synthetic_result or "")
++
++
++async def test_slow_bruteforce_guard_allows_bounded_probe():
++    processor = SlowBruteforceGuardProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    command = "head -100 /app/john/run/password.lst | while read -r pwd; do 7z t -p\"$pwd\" /app/secrets.7z; done"
++    events = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="brute-1",
++                tool_input={"command": command},
++            )
++        )
++    )
++
++    assert events[0].approved
++
++
++async def test_slow_bruteforce_guard_allows_small_literal_for_loop_probe():
++    processor = SlowBruteforceGuardProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    command = (
++        "for p in secret password 123456 12345678 123456789 1234567890 letmein admin root; "
++        'do echo "$p" | 7z x /app/secrets.7z -o/tmp/extract -p"$p"; done'
++    )
++    events = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="brute-1",
++                tool_input={"command": command},
++            )
++        )
++    )
++
++    assert events[0].approved
++
++
++async def test_slow_bruteforce_guard_blocks_large_literal_for_loop_probe():
++    processor = SlowBruteforceGuardProcessor()
++    await _collect(processor.on_task_start(TaskStartEvent(run_id="r", step_id=0)))
++
++    candidates = " ".join(["password"] + [f"candidate{i}" for i in range(40)])
++    command = f'for p in {candidates}; do 7z t -p"$p" /app/secrets.7z; done'
++    events = await _collect(
++        processor.on_before_tool(
++            ToolCallEvent(
++                run_id="r",
++                step_id=1,
++                tool_name="Bash",
++                tool_call_id="brute-1",
++                tool_input={"command": command},
++            )
++        )
++    )
++
++    assert events[0].approved is False
++    assert "SlowBruteforceGuard" in (events[0].synthetic_result or "")
+-- 
+2.50.1
+
