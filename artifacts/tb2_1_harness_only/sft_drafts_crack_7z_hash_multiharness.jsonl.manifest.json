@@ -1,0 +1,21 @@
+{
+  "filter_stats": {
+    "exported_drafts": 6,
+    "missing_trial_result": 7
+  },
+  "ledger_path": "experiments/tb2_1_harness_only/run_ledger.json",
+  "n_drafts": 6,
+  "output_path": "artifacts/tb2_1_harness_only/sft_drafts_crack_7z_hash_multiharness.jsonl",
+  "policy": {
+    "drafts_may_include_failed_or_dev_diagnostic_runs": true,
+    "format_compatible_with": "tb2_sft_candidate_v0",
+    "positive_sft_requires_train_accepted_reward_one": true,
+    "requires_human_review_before_training": true,
+    "scrubs_literal_solution_writes": true,
+    "scrubs_task_and_trial_ids": true,
+    "scrubs_verifier_artifacts": true
+  },
+  "schema_version": "tb2_sft_draft_export_manifest_v0",
+  "split_manifest_path": "splits/terminal_bench_2_1/harness_only_v0_manifest.json",
+  "task_name": "terminal-bench/crack-7z-hash"
+}

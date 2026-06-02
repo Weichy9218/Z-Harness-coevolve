@@ -23,7 +23,28 @@ H3b 修复后 real gate 已完成：reward `0.0`，无 infra exception，agent
 `exit_reason=budget_exceeded`，verifier 仍缺 `/app/solution.txt`。H3b 是 clean
 failure with new mechanism，但不是 pass signal，也不足以进入 dev ablation。
 
-## H0/H1/H2a/H2b/H2c/H2d/H2e 分别是什么
+H4 已按预注册方向实现 candidate patch 和 regression tests。H4 初次 run 暴露
+CostlyCrackingGuard false positive；修复后 H4d run 被 oh_runs `APIConnectionError`
+污染；H4e 是 clean completed gate failure：Harbor exceptions `0`，reward `0.0`，
+agent `budget_exceeded` at 100 steps，verifier 仍缺 `/app/solution.txt`。因此 H4
+没有 pass 或训练前收益信号。
+
+Qwen 8B route 暂时不要用 `boyue_base_url`：`boyue_base_url` 上的 `qwen3-8b`
+虽然可列出、简单请求可用，且 `enable_thinking=false` 生效，但 TB2 first
+tool-calling request 出现严重 tail latency 和重复 502。diagnostic job
+`tb2-qwen3-8b-thinking-off-crack-gate-20260602-222936` 在 step 0 没有任何
+assistant/tool response，oh_runs `task_end` 是 `InternalServerError: Error code: 502`。
+该 route 先标为 `excluded_for_now`，不能作为 benchmark metric。`apihy_API_KEY_qwen`
+当前没有 `qwen3-8b` 可用渠道；`qwen3-14b` smoke 正常但超过 `<=8B` 约束，只能用于
+runner/client 通路验证。
+
+下一阶段的目标不是继续在 `crack-7z-hash` 上做同题 micro-iteration，而是根据
+H0-H4e 积累的 failure taxonomy 优化 HarnessX 架构和必要 runtime policy。后续
+Terminal-Bench 做题模型切换到服务器 `tyyun_galaxy_1` 上的 vLLM Qwen3-8B；
+改 harness 的 meta-agent 可以使用 `GPT_sub2api_URL=https://ie-crs.haoxiang.ai/v1`
+上的 `gpt5.5`。从下一轮起，默认 `MAX_STEPS=50`。
+
+## H0-H4 分别是什么
 
 | 名称 | 任务 | 用途 | 当前状态 |
 | --- | --- | --- | --- |
@@ -37,6 +58,9 @@ failure with new mechanism，但不是 pass signal，也不足以进入 dev abla
 | H2e | 修复 H2d 后的 real gate | 判断 H2 是否机制干净，能否进入 dev ablation | completed，reward `0.0` |
 | H3 | failure-mechanism patch 初次 gate | 限制 repeated bounded probe/build loop/final output missing | invalid completed，暴露 BuildInstallLoopGuard false positive + APIConnectionError |
 | H3b | H3 false-positive 修复后 gate | 判断 H3 是否能让 `crack-7z-hash` 形成 pass 或 clean failure | completed，reward `0.0`，clean budget failure |
+| H4 | post-guard strategy patch 初次 gate | 限制 repeated cracking-family expansion | invalid cancelled，暴露 CostlyCrackingGuard false positive |
+| H4d | H4 false-positive 修复后 gate | 判断 H4 是否 clean 或有收益信号 | invalid completed，oh_runs `APIConnectionError` |
+| H4e | H4 clean rerun | 判断 H4 是否 clean pass 或有收益信号 | completed，reward `0.0`，clean budget failure |
 
 关键解释：
 
@@ -45,6 +69,8 @@ failure with new mechanism，但不是 pass signal，也不足以进入 dev abla
 - H1b 证明 apt recovery 方向有用，但不够。
 - H2e 是有效 gate failure：它可以进入内部结果整理，但不能支持训练或 dev ablation。
 - H3b 是有效 gate failure：H3 processors 干净触发，但仍没有解决任务。
+- H4/H4d 是 diagnostic：H4 初次 run 暴露 false positive，H4d 被 API failure 污染。
+- H4e 是有效 gate failure：H4 合法性更干净，但仍没有解决任务，且单题成本过高。
 
 ## H2e 为什么没有成功
 
@@ -113,9 +139,127 @@ H3b single-task gate 结果：
 - `FinalOutputSelfVerifyProcessor` 在 step 90 触发；
 - `RepeatedBoundedProbeGuardProcessor` 和 `BuildInstallLoopGuardProcessor` 都有 clean trigger。
 
-所以 H3b 不能进入 10-task same-split dev ablation。下一步应该是 H4/H3c 级别的
-post-guard strategy patch，或者把 `crack-7z-hash` 暂时作为 failure-taxonomy case
-搁置，先选择另一个 gate task 验证 H3 是否有 transfer value。
+所以 H3b 不能进入 10-task same-split dev ablation。它给出了 H4/H3c 级别
+post-guard strategy patch 的动机；如果后续 H4 仍不能形成 clean signal，就应把
+`crack-7z-hash` 暂时作为 failure-taxonomy case 搁置，先选择另一个 gate task
+验证 H3/H4 是否有 transfer value。
+
+## H4/H3c 预注册标准
+
+H4/H3c 的目标是解决 H3b 暴露的 post-guard strategy deadlock，而不是继续给
+`crack-7z-hash` 提示答案。预注册 candidate 是通用 costly no-progress ledger，
+优先约束 H3b 后段暴露的 repeated cracking-family expansion：
+
+1. 对 expensive cracking/build families 记录 approved attempt 的失败、timeout、
+   exhausted/no-recovery 结果。
+2. 对 cracking family，允许 discovery/format diagnosis、一次 bounded proof 和一次
+   serious attempt；当同一 family 已经积累两次 no-progress evidence 后，阻断下一次
+   无新证据扩跑，例如继续扩大 wordlist、mask attack 或重复 timeout。
+3. discovery / format diagnosis / result inspection 仍允许，例如 `--help`、`--version`、
+   `--example-hashes`、`--show`、`--status`、hash parser、文件存在性检查。只有
+   cracking tool 自身的 help/show/status/benchmark/list 语义算 discovery；不能因为
+   `hashcat ... | head` 里出现 `head/grep` 就绕过 ledger。
+4. 已被前序 processor blocked 的 synthetic tool call 不能被计入 H4 ledger。
+5. final artifact contract 在预算中后段触发：如果 required output 仍缺失，只能写
+   evidence-backed candidate 或明确无候选，不能编造答案。
+
+合法性约束：
+
+- 不包含 task-specific answer；
+- 不读取或泄漏 verifier/test；
+- 不改变 benchmark 难度；
+- 只约束通用 no-progress failure mechanism；
+- 保留 H2c/H2d/H3 false-positive regression tests。
+
+H4/H3c single-task gate 的分类标准：
+
+- clean pass：reward `1.0`，无 infra exception，`/app/solution.txt` 存在且 verifier pass；
+- clean failure with new mechanism：无 infra exception，无 false positive/false negative，
+  但仍 reward `0.0`；
+- invalid false positive / false negative：processor 阻断合法 bounded probe、hash parsing、
+  discovery，或放过预注册应阻断的 repeated no-progress family；
+- infra/auth/API failure：oh_runs 或 Harbor artifact 显示 API、auth、sandbox、verifier infra
+  问题。
+
+只有 clean pass 或预注册的强收益信号，才允许人工决定是否进入 10-task dev ablation。
+
+## H4 Gate 结果
+
+H4 candidate 已实现，但当前不能冻结：
+
+- 初次 H4 artifact：
+  `/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4-post-guard-contract-crack-gate-20260602-211811`
+- 初次 H4 run 不作为 metric：CostlyCrackingGuard 把 `/app/john/...` discovery/build
+  paths 误判为 executable `john` cracking attempts，随后 verifier 阶段被 caller timeout
+  取消。
+- false positive 已修复：`john`/`hashcat` 匹配改为 executable-token matching，并新增
+  focused regression tests。
+- H4d artifact：
+  `/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4d-post-guard-contract-crack-gate-20260602-215110`
+- H4d summary：
+  `artifacts/tb2_1_harness_only/h4d_summary.json`
+- H4d Harbor top-level completed，reward `0.0`，`exception_info=null`；但 oh_runs
+  `task_end` 是 `exit_reason=error` / `APIConnectionError: Connection error.`。
+  verifier 仍因为 `/app/solution.txt` missing 失败。
+- H4e artifact：
+  `/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4e-clean-rerun-crack-gate-20260602-221736`
+- H4e summary：
+  `artifacts/tb2_1_harness_only/h4e_summary.json`
+- H4e clean completed：Harbor exceptions `0`，reward `0.0`，oh_runs `task_end`
+  是 `exit_reason=budget_exceeded` at 100 steps；verifier 仍因为 `/app/solution.txt`
+  missing 失败。
+- H4e 中 `FinalOutputSelfVerifyProcessor` 在 step 75 触发，但 agent 继续耗尽预算；
+  `CostlyCrackingGuardProcessor` 没有出现在 clean run 的 trigger summary 中。
+
+结论：H4 可以保留为 candidate patch + tests，但它没有给出 clean single-task pass，
+也没有给出可用于 10-task dev ablation 的 clean strong signal。不要继续围绕
+`crack-7z-hash` 做同题 micro-iteration；应暂时把它降级为 failure-taxonomy case，
+换另一个 gate task 验证 H3/H4 是否有 transfer value。
+
+## 下一阶段协议
+
+根据 H4e 的成本和失败机制，后续 protocol 调整如下：
+
+1. 优先做 HarnessX 架构优化，而不是继续追加单个 task-specific guard。
+   - 整理 processor pipeline 的职责边界：recovery、cost guard、loop guard、
+     artifact contract、compaction refresh 分层清楚；
+   - 将 repeated no-progress evidence、synthetic block accounting、final artifact
+     contract 这些跨 task 机制做成更可复用的 runtime policy；
+   - 避免继续围绕 `crack-7z-hash` 写过窄规则。该 task 暂时只作为
+     failure-taxonomy case。
+
+2. 后续 Terminal-Bench gate 默认 `MAX_STEPS=50`。
+   - smoke / route check：`5-10` steps；
+   - mechanism debug：`30-50` steps；
+   - single-task gate：默认 `50` steps；
+   - 只有严格复现 H0-H4e 或做 apples-to-apples 历史对照时，才恢复 `100` steps。
+
+3. 后续做题模型与改 harness 模型分离。
+   - task-agent / Terminal-Bench 做题模型：服务器 `tyyun_galaxy_1` 上 vLLM 部署的
+     Qwen3-8B；
+   - meta-agent / harness 修改模型：`GPT_sub2api_URL=https://ie-crs.haoxiang.ai/v1`
+     上的 `gpt5.5`；
+   - 两者的 credentials、base URL、logs 和 trajectory 必须分开记录。`gpt5.5`
+     不能被写成 Terminal-Bench task-agent metric。
+
+下一轮 gate 命令模板：
+
+```bash
+set -a
+source /Users/weichy/code/Z-Harness-coevolve/.env
+set +a
+
+PATH=/Users/weichy/code/HarnessX/.venv/bin:$PATH \
+TB2_MODEL=qwen3-8b \
+TB2_API_BASE=<tyyun_galaxy_1 vLLM OpenAI-compatible /v1 endpoint> \
+TB2_API_KEY="<server-local or deployment key>" \
+bash /Users/weichy/code/HarnessX/benchmarks/terminal_bench_2/scripts/eval_local_docker.sh \
+  -t <new-gate-task> \
+  --job-name tb2-qwen3-8b-harness-architecture-gate-YYYYMMDD \
+  -n 1 \
+  --max-steps 50 \
+  --request-timeout-sec 600
+```
 
 ## 训练前还需要做什么
 
@@ -130,24 +274,34 @@ post-guard strategy patch，或者把 `crack-7z-hash` 暂时作为 failure-taxon
 
 更具体地说，训练前要补完这些内容：
 
-1. 固化 H3 candidate。
+1. 固化 H3/H4 candidate。
    - 已在 HarnessX commit `61977b7` 实现 repeated bounded probe guard。
    - 已实现 repeated build/install loop guard，并修复已 blocked tool call 被误计的 false positive。
    - 已强化 final self-verification：预算快结束且没有 `/app/solution.txt` 时触发 hard reminder。
-   - HarnessX targeted tests 当前 `32 passed`。
+   - 已实现 H4 costly cracking no-progress ledger candidate，并修复 `/app/john/...`
+     discovery/build path false positive。
+   - HarnessX targeted tests 当前 `41 passed`。
 
-2. 跑 H3 single-task gate。
+2. 跑 H3/H4 single-task gate。
    - 已跑 H3 初次 gate：invalid diagnostic。
    - 已跑 H3b 修复后 gate：completed，reward `0.0`，clean failure。
    - H3b failure mechanism 和 H0/H2e 不同，但仍是 100-step budget exhaustion，
      扩跑价值不足，不建议直接 dev ablation。
+   - 已跑 H4 初次 gate：invalid diagnostic，暴露 CostlyCrackingGuard false positive。
+   - 已跑 H4d 修复后 gate：invalid completed diagnostic，oh_runs `APIConnectionError`。
+   - 已跑 H4e clean rerun：completed，reward `0.0`，agent `budget_exceeded`，
+     verifier 缺 `/app/solution.txt`。
+   - 当前结论：H4 没有 pass 或强收益信号，不要继续同题 micro-iteration。
+   - 下一轮 single-task gate 改用 `MAX_STEPS=50` 和新的 gate task。
 
 3. 跑 10-task same-split dev ablation。
    - H0/M0：baseline harness。
    - H*/M0：candidate harness。
    - 同一 dev split、同一模型路由、同一 budget。
    - 至少要看到 H*/M0 多 1 个 pass，且没有不可解释的 H0 pass -> H* fail。
-   - 当前状态：不要跑。H3b 没有 single-task pass，也没有足够的 cost/behavior 改善信号。
+   - 当前状态：不要跑。H4e 虽然是 clean gate，但没有 single-task pass，
+     也没有足够的 clean cost/behavior 改善信号。先完成 HarnessX 架构优化和
+     Qwen3-8B server route smoke。
 
 4. 冻结 H*。
    - 记录 HarnessX commit 或完整 patch diff。

@@ -20,6 +20,43 @@
     "request_timeout_sec": 600,
     "n_concurrent": 1
   },
+  "route_diagnostics": [
+    {
+      "route_id": "boyue_qwen3_8b_thinking_off",
+      "model": "qwen3-8b",
+      "api_base_env": "boyue_base_url",
+      "api_key_env": "boyue_apikey",
+      "extra_body": {
+        "enable_thinking": false
+      },
+      "status": "excluded_for_now",
+      "reason": "Unstable for the TB2 first tool-calling request: observed severe tail latency and repeated 502s before any assistant response. Do not use for benchmark metrics until a fresh route smoke is stable.",
+      "diagnostic_job": "tb2-qwen3-8b-thinking-off-crack-gate-20260602-222936"
+    },
+    {
+      "route_id": "apihy_qwen3_8b_thinking_off",
+      "model": "qwen3-8b",
+      "api_base_env": "apihy_BASE_URL",
+      "api_key_env": "apihy_API_KEY_qwen",
+      "extra_body": {
+        "enable_thinking": false
+      },
+      "status": "unavailable",
+      "reason": "apihy qwen route does not list qwen3-8b; direct qwen3-8b requests return model_not_found / no available distributor."
+    },
+    {
+      "route_id": "apihy_qwen3_14b_thinking_off_smoke",
+      "model": "qwen3-14b",
+      "api_base_env": "apihy_BASE_URL",
+      "api_key_env": "apihy_API_KEY_qwen",
+      "extra_body": {
+        "enable_thinking": false
+      },
+      "status": "smoke_ok_not_8b",
+      "reason": "HarnessX 1-step smoke produced model_response -> tool_call -> tool_result with no exception, but the model exceeds the <=8B target.",
+      "diagnostic_job": "tb2-apihy-qwen3-14b-thinking-off-smoke-20260602-224531"
+    }
+  ],
   "training_export_policy": {
     "enabled_now": false,
     "reason": "Harness-only gain is not established yet; no H* train-split accepted trajectories exist.",
@@ -221,6 +258,73 @@
         "guarded_probe_build_loop_persists"
       ],
       "notes": "Clean completed H3 gate on HarnessX commit 61977b7. H3 guards fired without the H3-pre-fix false positive, including repeated bounded probe, build/install loop, and final output self-verify. The agent still exhausted 100 steps and verifier failed because /app/solution.txt was missing. Not training data and not enough to start dev ablation."
+    },
+    {
+      "entry_id": "h4_initial_post_guard_contract_crack_gate",
+      "harness_variant": "H4-pre-fix",
+      "split": "dev_tuning",
+      "status": "invalid_cancelled",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h4-post-guard-contract-crack-gate-20260602-211811",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4-post-guard-contract-crack-gate-20260602-211811",
+      "trial_result": "",
+      "failure_taxonomy": [
+        "invalid_gate",
+        "costly_cracking_guard_false_positive",
+        "john_path_discovery_false_positive",
+        "caller_timeout_verifier_cancelled"
+      ],
+      "notes": "Pre-fix H4 attempt. CostlyCrackingGuard incorrectly matched /app/john/... discovery/build paths and blocked legal inspection. The foreground caller later cancelled during verifier/cleanup, so the run is excluded from metrics."
+    },
+    {
+      "entry_id": "h4d_post_guard_contract_crack_gate",
+      "harness_variant": "H4",
+      "split": "dev_tuning",
+      "status": "invalid_completed",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h4d-post-guard-contract-crack-gate-20260602-215110",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4d-post-guard-contract-crack-gate-20260602-215110",
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4d-post-guard-contract-crack-gate-20260602-215110/crack-7z-hash__LLfmdhR/result.json",
+      "summary_artifact": "artifacts/tb2_1_harness_only/h4d_summary.json",
+      "reward": 0.0,
+      "runtime_seconds": 1075.492,
+      "observed_assistant_steps": 64,
+      "observed_bash_tool_calls": 64,
+      "synthetic_tool_blocks": 9,
+      "failure_taxonomy": [
+        "invalid_gate",
+        "api_connection_error_task_end",
+        "missing_solution_file",
+        "not_metric"
+      ],
+      "notes": "H4 false-positive fix and targeted tests passed, but this gate is invalid: Harbor completed with reward 0 and exception_info=null, while oh_runs task_end had APIConnectionError at step 64. Verifier still failed because /app/solution.txt was missing. Excluded from metrics, dev ablation, and training data."
+    },
+    {
+      "entry_id": "h4e_clean_rerun_crack_gate",
+      "harness_variant": "H4",
+      "split": "dev_tuning",
+      "status": "completed",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h4e-clean-rerun-crack-gate-20260602-221736",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4e-clean-rerun-crack-gate-20260602-221736",
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4e-clean-rerun-crack-gate-20260602-221736/crack-7z-hash__NySEtQ6/result.json",
+      "summary_artifact": "artifacts/tb2_1_harness_only/h4e_summary.json",
+      "reward": 0.0,
+      "runtime_seconds": 2030.287,
+      "observed_assistant_steps": 100,
+      "observed_bash_tool_calls": 100,
+      "synthetic_tool_blocks": 8,
+      "failure_taxonomy": [
+        "valid_gate_failure",
+        "budget_exceeded",
+        "missing_solution_file",
+        "no_h4_pass_signal",
+        "high_cost_single_task_gate"
+      ],
+      "notes": "Clean completed H4 rerun with no Harbor exception and oh_runs task_end budget_exceeded at 100 steps. Verifier failed because /app/solution.txt was missing. FinalOutputSelfVerify fired at step 75, but the agent continued to budget exhaustion. CostlyCrackingGuard did not trigger in this clean run. Not training data and not enough to start dev ablation."
     }
   ]
 }

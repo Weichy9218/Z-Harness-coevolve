@@ -22,6 +22,38 @@ splits/terminal_bench_2_1/harness_heldout_v0.tasks.json
 注意：dev split 目前仍需用 fresh Harbor metadata 再验证一次。train split 当前为空，
 这是设计选择：H* 冻结前不能收训练轨迹。
 
+## Qwen Route Diagnostics
+
+当前先排除 `boyue_base_url` 上的 `qwen3-8b` route，不把它用于 TB2 metric：
+
+- `boyue_base_url` + `boyue_apikey` 能列出并调用 `qwen3-8b`，且
+  `extra_body={"enable_thinking": false}` 生效；
+- 但同一个 TB2 first tool-calling request 出现严重 tail latency 和重复 502：
+  有时 1-2 秒返回，有时 60-120 秒，甚至超过 3 分钟无响应；
+- diagnostic job
+  `tb2-qwen3-8b-thinking-off-crack-gate-20260602-222936` 在 step 0
+  没有任何 assistant/tool response，oh_runs `task_end` 是
+  `InternalServerError: Error code: 502`，`total_tokens=0`；
+- 因此该 route 暂时标记为 `excluded_for_now`，后续除非重新通过 route smoke，
+  否则不能作为 Qwen 8B benchmark metric。
+
+`apihy_BASE_URL=https://zgc.apihy.com/v1` + `apihy_API_KEY_qwen` 不能替代
+8B route：模型列表没有 `qwen3-8b`，直接请求 `qwen3-8b` / `Qwen/Qwen3-8B`
+返回 `model_not_found` / 无可用渠道。该 route 上的 `qwen3-14b` 和 `qwen3-32b`
+first tool-calling smoke 正常；其中 `qwen3-14b` 的 1-step HarnessX smoke
+`tb2-apihy-qwen3-14b-thinking-off-smoke-20260602-224531` 无 exception，但它超过
+`<=8B` 约束，只能用于 runner/client 通路验证，不能作为 8B student track metric。
+
+后续 Qwen3-8B route 改为服务器 `tyyun_galaxy_1` 上的 vLLM deployment，而不是
+复用上述不稳定或不满足约束的第三方 route。新 route 跑出的结果必须单独标记为
+Qwen3-8B/vLLM/server track，不能和历史 `deepseek-v3.2` H0-H4e 结果直接混成
+同一 metric。后续 gate 默认 `MAX_STEPS=50`；历史 H0-H4e 的 100-step 结果仅作为
+failure taxonomy 和对照证据保留。
+
+改 harness 的 meta-agent 可以使用
+`GPT_sub2api_URL=https://ie-crs.haoxiang.ai/v1` 上的 `gpt5.5`。它只用于
+architecture/code/docs 工作，不进入 Terminal-Bench task-agent trajectory。
+
 ## 本地 Terminal-Bench 尝试总表
 
 这张表是当前本地已经做过的 TB2.1 `crack-7z-hash` 尝试记录。它的用途是把
@@ -40,8 +72,11 @@ splits/terminal_bench_2_1/harness_heldout_v0.tasks.json
 | H2e | `tb2-1-h2e-external-command-regex-crack-gate-20260602` | completed | `0.0` | yes, gate failure | no infra exception，但仍没有写 `/app/solution.txt`；H2 clean 但不足 |
 | H3 | `tb2-1-h3-failure-mechanism-crack-gate-20260602` | invalid completed / diagnostic | `0.0` | no | pre-fix H3 run：oh_runs `task_end` 有 `APIConnectionError`，且 BuildInstallLoopGuard 把已 blocked apt command 误计为 install failure |
 | H3b | `tb2-1-h3b-failure-mechanism-crack-gate-20260602` | completed | `0.0` | yes, gate failure | H3 guards 干净触发，但 agent `budget_exceeded`，verifier 仍缺 `/app/solution.txt` |
+| H4 | `tb2-1-h4-post-guard-contract-crack-gate-20260602-211811` | invalid cancelled / diagnostic | n/a | no | pre-fix H4 run：CostlyCrackingGuard 把 `/app/john/...` discovery path 误判为 `john` cracking executable；随后 verifier 阶段被 caller timeout 取消 |
+| H4d | `tb2-1-h4d-post-guard-contract-crack-gate-20260602-215110` | invalid completed / diagnostic | `0.0` | no | H4 false positive 修复后 rerun；Harbor completed，但 oh_runs `task_end` 是 `APIConnectionError`，verifier 仍缺 `/app/solution.txt` |
+| H4e | `tb2-1-h4e-clean-rerun-crack-gate-20260602-221736` | completed | `0.0` | yes, gate failure | clean H4 rerun：agent `budget_exceeded` at 100 steps，verifier 仍缺 `/app/solution.txt`；无 pass/收益信号 |
 
-当前只有 H0、H2e、H3b 能作为内部 gate/baseline 结果比较。H1a/H1b/H2a/H2b/H2c/H2d/H3
+当前只有 H0、H2e、H3b、H4e 能作为内部 gate/baseline 结果比较。H1a/H1b/H2a/H2b/H2c/H2d/H3/H4/H4d
 是 harness debugging 证据，只能用于 failure taxonomy 和 regression tests。
 
 ## H0 Baseline Result
@@ -208,6 +243,123 @@ H3b 是 clean failure with new mechanism：
 post-guard strategy deadlock，决定是否做 H4/H3c，或者把 `crack-7z-hash` 暂时
 降级为 failure-taxonomy case。
 
+## H4 Gate 结果
+
+H4 patch 目标仍是通用 harness policy，不提示答案：
+
+- 新增 `CostlyCrackingGuardProcessor`：对 approved `hashcat` / executable `john`
+  cracking attempts 记录 exhausted、no-recovery、timeout 等 no-progress evidence；
+- 默认允许一次 bounded proof 和一次 serious attempt，同一 cracking family 积累两次
+  no-progress evidence 后阻断继续扩大 wordlist、mask 或 timeout；
+- discovery / format diagnosis / result inspection 继续允许，例如 `--help`、`--version`、
+  `--example-hashes`、`--show`、`--status`、hash parser、路径/文件检查；
+- `FinalOutputSelfVerifyProcessor` 默认从 step budget `0.75` 触发，而不是 `0.90`。
+
+H4 初次 artifact：
+
+```text
+/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4-post-guard-contract-crack-gate-20260602-211811
+```
+
+H4 初次 run 不作为 metric。它暴露了 CostlyCrackingGuard false positive：`/app/john/...`
+目录、`7z2john.pl` 脚本、`/app/john/src` build/discovery path 被误判为 `john`
+cracking executable。这个问题已用 focused regression tests 修复。
+
+H4d artifact：
+
+```text
+/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4d-post-guard-contract-crack-gate-20260602-215110
+```
+
+H4d summary：
+
+```text
+artifacts/tb2_1_harness_only/h4d_summary.json
+```
+
+| 字段 | 值 |
+| --- | --- |
+| task | `terminal-bench/crack-7z-hash` |
+| trial | `crack-7z-hash__LLfmdhR` |
+| Harbor reward | `0.0` |
+| Harbor infra exceptions | `0` |
+| oh_runs exit reason | `error` |
+| oh_runs error | `APIConnectionError: Connection error.` |
+| verifier failure | missing `/app/solution.txt` |
+| runtime | `17m 55s` |
+| observed assistant steps | `64` |
+| observed Bash calls | `64` |
+| job input tokens | `741325` |
+| synthetic tool blocks | `9` |
+
+H4d processor triggers：
+
+| processor | count |
+| --- | --- |
+| `AptInstallRecoveryProcessor` | `2` |
+| `BuildInstallLoopGuardProcessor` | `5` |
+| `CompactionProcessor` | `1` |
+| `EnvironmentContextInjector` | `1` |
+| `PostCompactionRefreshProcessor` | `1` |
+| `RepeatedBoundedProbeGuardProcessor` | `1` |
+| `SlowBruteforceGuardProcessor` | `5` |
+| `SystemPromptProcessor` | `1` |
+| `ToolTimeoutStrategyProcessor` | `1` |
+
+H4d 是 invalid completed diagnostic：Harbor top-level completed 且 `exception_info=null`，
+但 oh_runs `task_end` 是 `exit_reason=error` / `APIConnectionError`。因此 H4d 不进入
+metric 比较，也不能支持 10-task dev ablation 或训练。
+
+H4e clean rerun artifact：
+
+```text
+/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h4e-clean-rerun-crack-gate-20260602-221736
+```
+
+H4e summary：
+
+```text
+artifacts/tb2_1_harness_only/h4e_summary.json
+```
+
+| 字段 | 值 |
+| --- | --- |
+| task | `terminal-bench/crack-7z-hash` |
+| trial | `crack-7z-hash__NySEtQ6` |
+| reward | `0.0` |
+| Harbor exceptions | `0` |
+| agent exit reason | `budget_exceeded` |
+| verifier failure | missing `/app/solution.txt` |
+| runtime | `33m 50s` |
+| observed assistant steps | `100` |
+| observed Bash calls | `100` |
+| job input tokens | `1431031` |
+| raw output tokens from oh_runs | `16101` |
+| synthetic tool blocks | `8` |
+
+H4e processor triggers：
+
+| processor | count |
+| --- | --- |
+| `AptInstallRecoveryProcessor` | `2` |
+| `BuildInstallLoopGuardProcessor` | `4` |
+| `CompactionProcessor` | `3` |
+| `EnvironmentContextInjector` | `1` |
+| `FinalOutputSelfVerifyProcessor` | `1` |
+| `PostCompactionRefreshProcessor` | `3` |
+| `RepeatedBoundedProbeGuardProcessor` | `3` |
+| `SlowBruteforceGuardProcessor` | `4` |
+| `SystemPromptProcessor` | `1` |
+| `ToolTimeoutStrategyProcessor` | `2` |
+
+H4e 是 clean completed gate failure：没有 Harbor exception，也没有 oh_runs API error；
+但 `FinalOutputSelfVerifyProcessor` 在 step 75 触发后，agent 仍继续跑到 100-step
+budget exhaustion，最终没有写 `/app/solution.txt`。这说明 H4 patch 合法性问题已
+基本收敛，但没有 pass 或强收益信号。当前不应继续围绕 `crack-7z-hash` 做同题
+micro-iteration，也不应进入 10-task dev ablation 或训练。更合理的下一步是把
+`crack-7z-hash` 暂时降级为 failure-taxonomy case，换另一个 gate task 验证
+H3/H4 是否有 transfer value。
+
 ## 本地代码同步状态
 
 Z repo 已记录并同步当前 TB2 文档、ledger 和 export policy。
@@ -235,7 +387,7 @@ Z repo：
 HarnessX targeted tests：
 
 ```text
-32 passed
+41 passed
 ```
 
 ## SFT Export 结果
@@ -258,6 +410,19 @@ n_candidates = 0
 - train split 为空；
 - 没有 accepted successful train trajectories；
 - dev tuning / invalid / failed / heldout trajectories 都不能进入训练。
+
+为便于检查同一 task 的多次 harness 行为，另有一个 diagnostic draft export：
+
+```text
+artifacts/tb2_1_harness_only/sft_drafts_crack_7z_hash_multiharness.jsonl
+artifacts/tb2_1_harness_only/sft_drafts_crack_7z_hash_multiharness.jsonl.manifest.json
+```
+
+该文件有 `6` 条 `crack-7z-hash` 多 harness 轨迹，结构兼容
+`tb2_sft_candidate_v0` 的 `messages` / `tool_definitions` 字段，但 schema 是
+`tb2_sft_draft_v0`，且每条都标记
+`training_policy.accepted_for_positive_sft=false`。用途是人工 review、failure
+taxonomy 或后续偏好/反例数据设计；不能直接作为正样本 SFT 训练数据。
 
 ## tau-bench
 

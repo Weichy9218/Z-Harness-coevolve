@@ -18,6 +18,7 @@ from typing import Any, Iterable
 
 
 SCHEMA_VERSION = "tb2_sft_candidate_v0"
+DRAFT_SCHEMA_VERSION = "tb2_sft_draft_v0"
 TRAIN_SPLIT = "train"
 HELDOUT_SPLITS = {"heldout", "test"}
 MESSAGE_RECORD_TYPES = {"system", "raw_user", "raw_assistant", "raw_tool", "assistant", "tool"}
@@ -349,6 +350,52 @@ def should_export_entry(entry: dict[str, Any], result: dict[str, Any], heldout_t
     return True, "accepted"
 
 
+def positive_sft_rejection_reason(entry: dict[str, Any], result: dict[str, Any], heldout_tasks: set[str]) -> str:
+    allowed, reason = should_export_entry(entry, result, heldout_tasks)
+    return "accepted" if allowed else reason
+
+
+def build_sft_like_record(
+    *,
+    ledger: dict[str, Any],
+    entry: dict[str, Any],
+    result: dict[str, Any],
+    trial_result: Path,
+    messages: list[dict[str, Any]],
+    tool_definitions: list[dict[str, Any]],
+    report: SanitizationReport,
+    schema_version: str = SCHEMA_VERSION,
+    record_type: str = "tb2_sft_candidate",
+    training_policy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    record = {
+        "schema_version": schema_version,
+        "record_type": record_type,
+        "source": {
+            "benchmark": "Terminal-Bench",
+            "benchmark_version": "2.1",
+            "dataset": result.get("source"),
+            "task_fingerprint": task_fingerprint(result),
+            "artifact_fingerprint": artifact_fingerprint([trial_result, trial_result.parent / "agent" / "oh_runs"]),
+            "harness_variant": entry.get("harness_variant"),
+            "model": ((result.get("config") or {}).get("agent") or {}).get("model_name"),
+        },
+        "messages": messages,
+        "tool_definitions": tool_definitions,
+        "reward": reward_from_result(result),
+        "failure_taxonomy": entry.get("failure_taxonomy") or [],
+        "provenance": {
+            "run_ledger_id": ledger.get("ledger_id"),
+            "entry_id": entry.get("entry_id"),
+            "split": entry.get("split"),
+        },
+        "sanitization": report.to_dict(),
+    }
+    if training_policy is not None:
+        record["training_policy"] = training_policy
+    return record
+
+
 def iter_sft_candidates(ledger: dict[str, Any], split_manifest: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, int]]:
     heldout_tasks = collect_heldout_tasks(split_manifest)
     candidates: list[dict[str, Any]] = []
@@ -377,32 +424,86 @@ def iter_sft_candidates(ledger: dict[str, Any], split_manifest: dict[str, Any]) 
             stats["missing_messages"] = stats.get("missing_messages", 0) + 1
             continue
 
-        candidate = {
-            "schema_version": SCHEMA_VERSION,
-            "record_type": "tb2_sft_candidate",
-            "source": {
-                "benchmark": "Terminal-Bench",
-                "benchmark_version": "2.1",
-                "dataset": result.get("source"),
-                "task_fingerprint": task_fingerprint(result),
-                "artifact_fingerprint": artifact_fingerprint([trial_result, oh_runs_dir]),
-                "harness_variant": entry.get("harness_variant"),
-                "model": ((result.get("config") or {}).get("agent") or {}).get("model_name"),
-            },
-            "messages": messages,
-            "tool_definitions": tool_definitions,
-            "reward": reward_from_result(result),
-            "failure_taxonomy": entry.get("failure_taxonomy") or [],
-            "provenance": {
-                "run_ledger_id": ledger.get("ledger_id"),
-                "entry_id": entry.get("entry_id"),
-                "split": entry.get("split"),
-            },
-            "sanitization": report.to_dict(),
-        }
+        candidate = build_sft_like_record(
+            ledger=ledger,
+            entry=entry,
+            result=result,
+            trial_result=trial_result,
+            messages=messages,
+            tool_definitions=tool_definitions,
+            report=report,
+        )
         candidates.append(candidate)
 
     return candidates, stats
+
+
+def iter_sft_drafts(
+    ledger: dict[str, Any],
+    split_manifest: dict[str, Any],
+    *,
+    task_name: str | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    heldout_tasks = collect_heldout_tasks(split_manifest)
+    drafts: list[dict[str, Any]] = []
+    stats: dict[str, int] = {}
+    requested_aliases = {task_name, task_short_name(task_name)} if task_name else set()
+    task_groups: dict[str, int] = {}
+
+    for entry in ledger.get("entries", []):
+        trial_result = Path(str(entry.get("trial_result") or ""))
+        if not trial_result.is_file():
+            reason = "missing_trial_result"
+            stats[reason] = stats.get(reason, 0) + 1
+            continue
+
+        result = load_json(trial_result)
+        result_task_name = str(result.get("task_name") or entry.get("task_name") or "")
+        result_aliases = {result_task_name, task_short_name(result_task_name)}
+        if requested_aliases and not (requested_aliases & result_aliases):
+            reason = "task_filtered"
+            stats[reason] = stats.get(reason, 0) + 1
+            continue
+
+        task_name_value = str(result.get("task_name") or entry.get("task_name") or "")
+        trial_name = str(result.get("trial_name") or entry.get("trial_name") or trial_result.parent.name)
+        task_aliases = {task_name_value, task_short_name(task_name_value)}
+        trial_aliases = {trial_name, trial_result.parent.name}
+        oh_runs_dir = trial_result.parent / "agent" / "oh_runs"
+        messages, tool_definitions, report = build_messages(oh_runs_dir, task_aliases, trial_aliases)
+        if not messages:
+            reason = "missing_messages"
+            stats[reason] = stats.get(reason, 0) + 1
+            continue
+
+        rejection_reason = positive_sft_rejection_reason(entry, result, heldout_tasks)
+        group_id = task_fingerprint(result)
+        task_groups[group_id] = task_groups.get(group_id, 0) + 1
+        draft = build_sft_like_record(
+            ledger=ledger,
+            entry=entry,
+            result=result,
+            trial_result=trial_result,
+            messages=messages,
+            tool_definitions=tool_definitions,
+            report=report,
+            schema_version=DRAFT_SCHEMA_VERSION,
+            record_type="tb2_sft_draft",
+            training_policy={
+                "format_compatible_with": SCHEMA_VERSION,
+                "accepted_for_positive_sft": rejection_reason == "accepted",
+                "positive_sft_rejection_reason": rejection_reason,
+                "requires_human_review_before_training": True,
+                "intended_use": "diagnostic_multiharness_trace_review",
+            },
+        )
+        draft["source"]["task_group_id"] = group_id
+        draft["source"]["task_group_index"] = task_groups[group_id] - 1
+        draft["source"]["status"] = entry.get("status")
+        drafts.append(draft)
+        stats["exported_drafts"] = stats.get("exported_drafts", 0) + 1
+
+    return drafts, stats
 
 
 def export_sft_candidates(ledger_path: Path, split_manifest_path: Path, output_path: Path) -> dict[str, Any]:
@@ -436,6 +537,44 @@ def export_sft_candidates(ledger_path: Path, split_manifest_path: Path, output_p
     return manifest
 
 
+def export_sft_drafts(
+    ledger_path: Path,
+    split_manifest_path: Path,
+    output_path: Path,
+    *,
+    task_name: str | None = None,
+) -> dict[str, Any]:
+    ledger = load_json(ledger_path)
+    split_manifest = load_json(split_manifest_path)
+    drafts, stats = iter_sft_drafts(ledger, split_manifest, task_name=task_name)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
+        for draft in drafts:
+            handle.write(json.dumps(draft, sort_keys=True) + "\n")
+
+    manifest = {
+        "schema_version": "tb2_sft_draft_export_manifest_v0",
+        "ledger_path": str(ledger_path),
+        "split_manifest_path": str(split_manifest_path),
+        "output_path": str(output_path),
+        "task_name": task_name,
+        "n_drafts": len(drafts),
+        "filter_stats": dict(sorted(stats.items())),
+        "policy": {
+            "format_compatible_with": SCHEMA_VERSION,
+            "positive_sft_requires_train_accepted_reward_one": True,
+            "drafts_may_include_failed_or_dev_diagnostic_runs": True,
+            "requires_human_review_before_training": True,
+            "scrubs_task_and_trial_ids": True,
+            "scrubs_verifier_artifacts": True,
+            "scrubs_literal_solution_writes": True,
+        },
+    }
+    write_json(output_path.with_suffix(output_path.suffix + ".manifest.json"), manifest)
+    return manifest
+
+
 def summarize_command(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Summarize a TB2 Harbor job artifact root.")
     parser.add_argument("job_root", type=Path)
@@ -447,6 +586,24 @@ def summarize_command(argv: list[str] | None = None) -> int:
         write_json(args.output, summary)
     else:
         print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def export_drafts_command(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Export TB2 diagnostic trajectories in SFT-compatible draft format.")
+    parser.add_argument("--ledger", type=Path, required=True)
+    parser.add_argument("--split-manifest", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--task-name", default=None)
+    args = parser.parse_args(argv)
+
+    manifest = export_sft_drafts(
+        args.ledger,
+        args.split_manifest,
+        args.output,
+        task_name=args.task_name,
+    )
+    print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0
 
 

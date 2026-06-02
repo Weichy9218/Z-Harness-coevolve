@@ -7,6 +7,7 @@ from pathlib import Path
 
 from zharness.tb2.pretrain_prep import (
     SanitizationReport,
+    export_sft_drafts,
     export_sft_candidates,
     sanitize_text,
     summarize_trial,
@@ -211,3 +212,45 @@ def test_export_outputs_sanitized_train_candidate(tmp_path: Path) -> None:
     assert "/Users/weichy" not in rendered
     assert rows[0]["sanitization"]["needs_human_review"] is True
 
+
+def test_export_drafts_keeps_dev_diagnostics_out_of_positive_sft(tmp_path: Path) -> None:
+    trial_result = _make_trial(tmp_path, task_name="terminal-bench/crack-7z-hash", reward=0.0)
+    split_manifest = {"splits": {"heldout": {"tasks": []}}}
+    ledger = {
+        "ledger_id": "test-ledger",
+        "entries": [
+            {
+                "entry_id": "harness-diagnostic",
+                "harness_variant": "H4",
+                "split": "dev_tuning",
+                "status": "completed",
+                "accepted_for_training": False,
+                "task_name": "terminal-bench/crack-7z-hash",
+                "trial_result": str(trial_result),
+                "failure_taxonomy": ["missing_solution_file"],
+            }
+        ],
+    }
+    ledger_path = tmp_path / "ledger.json"
+    split_path = tmp_path / "split.json"
+    output_path = tmp_path / "drafts.jsonl"
+    _write_json(ledger_path, ledger)
+    _write_json(split_path, split_manifest)
+
+    manifest = export_sft_drafts(
+        ledger_path,
+        split_path,
+        output_path,
+        task_name="terminal-bench/crack-7z-hash",
+    )
+    rows = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
+
+    assert manifest["n_drafts"] == 1
+    assert rows[0]["schema_version"] == "tb2_sft_draft_v0"
+    assert rows[0]["training_policy"]["format_compatible_with"] == "tb2_sft_candidate_v0"
+    assert rows[0]["training_policy"]["accepted_for_positive_sft"] is False
+    assert rows[0]["training_policy"]["positive_sft_rejection_reason"] == "not_train_split"
+    assert rows[0]["source"]["task_group_index"] == 0
+    rendered = json.dumps(rows[0])
+    assert "crack-7z-hash" not in rendered
+    assert "/Users/weichy" not in rendered
