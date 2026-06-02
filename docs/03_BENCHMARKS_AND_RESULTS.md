@@ -22,6 +22,26 @@ splits/terminal_bench_2_1/harness_heldout_v0.tasks.json
 注意：dev split 目前仍需用 fresh Harbor metadata 再验证一次。train split 当前为空，
 这是设计选择：H* 冻结前不能收训练轨迹。
 
+## 本地 Terminal-Bench 尝试总表
+
+这张表是当前本地已经做过的 TB2.1 `crack-7z-hash` 尝试记录。它的用途是把
+“实验失败”“invalid diagnostic”“有效 gate failure”分开，避免把调 harness
+过程中的中间 run 当成最终结果。
+
+| 阶段 | job | 状态 | reward | 是否可作为 metric | 主要发现 |
+| --- | --- | --- | --- | --- | --- |
+| H0 | `tb2-1-h0-smoke` | completed | `0.0` | yes, baseline | baseline harness 会进入 tool/runtime failure loop，最终缺 `/app/solution.txt` |
+| H1a | `tb2-1-h1-apt-recovery-crack-gate-20260602` | invalid stopped | n/a | no | prompt-only 不干净，仍有 preemptive `apt-get update` 和 slow brute-force drift |
+| H1b | `tb2-1-h1b-strict-apt-gate-crack-20260602` | invalid stopped / diagnostic | n/a | no | strict apt recovery 有效，但 heavy install timeout 和 slow brute force 仍在 |
+| H2a | `tb2-1-h2-tool-cost-crack-gate-20260602` | invalid stopped | n/a | no | first guard 没挡住 unbounded loop，false negative |
+| H2b | `tb2-1-h2b-tool-cost-crack-gate-20260602` | invalid stopped | n/a | no | guard 错挡小规模 literal probe，false positive |
+| H2c | `tb2-1-h2c-tool-cost-crack-gate-20260602` | invalid stopped | n/a | no | `cat` 在成功分支中被误判为 wordlist source，false positive |
+| H2d | `tb2-1-h2d-literal-probe-crack-gate-20260602` | invalid stopped | n/a | no | `$7z$` hash string 被误判为外部 `7z` 命令，false positive |
+| H2e | `tb2-1-h2e-external-command-regex-crack-gate-20260602` | completed | `0.0` | yes, gate failure | no infra exception，但仍没有写 `/app/solution.txt`；H2 clean 但不足 |
+
+当前只有 H0 和 H2e 能作为内部 gate/baseline 结果比较。H1a/H1b/H2a/H2b/H2c/H2d
+是 harness debugging 证据，只能用于 failure taxonomy 和 regression tests。
+
 ## H0 Baseline Result
 
 H0 smoke artifact：
@@ -103,6 +123,21 @@ H2e processor triggers：
 | `CustomSelfVerifyProcessor` | `3` |
 | `CompactionProcessor` | `2` |
 | `PostCompactionRefreshProcessor` | `2` |
+
+## 本地代码同步状态
+
+Z repo 已记录并同步当前 TB2 文档、ledger 和 export policy。
+
+HarnessX 本地有 Terminal-Bench 相关提交：
+
+```text
+4143465 Add TB2 harness-only H2 guards
+266e23b Fix TB2 brute-force guard false positives
+```
+
+这两个提交目前还没有推到 `Darwin-Agent/HarnessX` 远端，因为当前 GitHub 身份对该
+仓库没有写权限。它们仍然是当前本地 H2e/H3 继续工作的 runnable substrate。无关的
+`recipe/gaia_evolver/data/` 不属于 TB2 主线，本轮忽略。
 
 ## 当前测试结果
 

@@ -89,6 +89,67 @@ H3 的目标不是“提示答案”，而是进一步约束无效工作流：
 
 H3 single-task gate 成功后，才跑 10-task same-split dev ablation。
 
+## 训练前还需要做什么
+
+训练前有四个 gate。任何一个没过，都不要 SFT / LoRA / GRPO。
+
+| Gate | 谁决定 | 自动检查 | 人工检查 | 当前状态 |
+| --- | --- | --- | --- | --- |
+| G1: H* 合法 | 人工预注册标准 | processor tests、verifier/test leakage scan | 确认没有 task-specific answer 或 benchmark shortcut | 未完成 |
+| G2: H* 有效 | 自动 run + 人工复核 | H0/M0 vs H*/M0 same-split dev ablation | 确认收益不是 infra noise 或过拟合单 task | 未完成 |
+| G3: train 数据可用 | 自动 export + 人工抽查 | 只导出 train split、reward `1.0`、accepted trajectories | 抽查轨迹无泄漏、无错误策略 | 未完成 |
+| G4: heldout 隔离 | 自动 manifest check | heldout/test never exported | 确认没有根据 heldout 改 H* 或调训练 | 未完成 |
+
+更具体地说，训练前要补完这些内容：
+
+1. 固化 H3 candidate。
+   - 在 HarnessX 中实现 repeated bounded probe guard。
+   - 在 HarnessX 中实现 repeated build/install loop guard。
+   - 强化 final self-verification：预算快结束且没有 `/app/solution.txt` 时必须处理。
+   - 给每个 processor 加 regression tests，尤其保护 H2c/H2d 修过的 false positive。
+
+2. 跑 H3 single-task gate。
+   - 任务仍用 `terminal-bench/crack-7z-hash`。
+   - 固定 `M0=deepseek-v3.2`、API base、sandbox、max steps、request timeout。
+   - 成功标准优先是 reward `1.0`；如果 reward `0.0`，必须证明 failure mechanism
+     已经和 H0/H2e 明显不同且有扩跑价值。
+
+3. 跑 10-task same-split dev ablation。
+   - H0/M0：baseline harness。
+   - H*/M0：candidate harness。
+   - 同一 dev split、同一模型路由、同一 budget。
+   - 至少要看到 H*/M0 多 1 个 pass，且没有不可解释的 H0 pass -> H* fail。
+
+4. 冻结 H*。
+   - 记录 HarnessX commit 或完整 patch diff。
+   - 记录 Z repo ledger、split manifest、summary script version。
+   - H* 冻结后不能再根据 dev 结果改 policy。
+
+5. 建立真实 train split。
+   - 现在 train split 为空，这是正确的。
+   - H* 冻结后再用 fresh metadata 生成 train split。
+   - dev tuning 和 heldout/test 不能进入 train。
+
+6. 用冻结 H* 采 train trajectories。
+   - 只收 train split。
+   - 只收 completed、reward `1.0`、无 infra exception 的 trajectories。
+   - 失败轨迹只能用于 taxonomy，不能进 SFT candidates。
+
+7. 做 sanitizer / leakage scan / sampled review。
+   - 删除或屏蔽 API key、路径里不该训练的本地信息、verifier/test 内容。
+   - 排除 dev、heldout、invalid、failed trajectories。
+   - 人工抽查一小批，确认 agent 学到的是通用 tool-use behavior，不是答案记忆。
+
+8. 生成训练 artifact。
+   - `sft_candidates.jsonl` 只能来自 accepted train successes。
+   - 每条样本保留 task id、harness variant、reward、artifact root、sanitizer status。
+   - 训练配置里记录 base model、LoRA/optimizer、dataset hash、split hash。
+
+9. 训练后做 heldout / tau-bench transfer。
+   - TB2 heldout 只做最终评估。
+   - tau-bench / tau3-bench 用来检查 transfer，不参与 H* 选择。
+   - 如果 heldout/tau 失败，只能回到新一轮 protocol，不能把 heldout 轨迹补进训练。
+
 ## dev ablation 条件
 
 只有 H3 或后续 gate clean 且有合理收益信号后才跑：
