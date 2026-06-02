@@ -98,7 +98,15 @@ request timeout 和 concurrency。
 - H2d 因 hash-string false positive 被标为 invalid。
 - H2e real gate 已从 `.env` 读取 `apihy_API_KEY_deepseek` 后完成：
   reward `0.0`，无 infra exception，但 verifier 缺 `/app/solution.txt`。
+- H3 failure-mechanism patch 已在 HarnessX 本地实现并提交：
+  `61977b7 Add TB2 H3 failure-mechanism guards`。
+- H3 初次 run 暴露 BuildInstallLoopGuard false positive，并且 oh_runs
+  `task_end` 有 `APIConnectionError`，标为 invalid diagnostic。
+- H3b 修复后 real gate 已完成：reward `0.0`，无 infra exception，
+  agent `exit_reason=budget_exceeded`，verifier 仍缺 `/app/solution.txt`。
+  H3b 是 clean gate failure，但不是训练或 dev ablation 的充分信号。
 
-训练还不能开始。H2e 说明 guard 机制已经比 H2c/H2d 干净，但仍不足以让
-`crack-7z-hash` 成功。下一步应先做 H3 failure-mechanism patch，再决定是否进入
-10-task dev ablation。
+训练还不能开始。H3b 说明 repeated bounded probe、build/install loop 和 final
+output self-verify 机制可以干净介入，但仍不足以让 `crack-7z-hash` 成功。下一步
+不应直接跑 10-task dev ablation，而应先针对 H3b 的 post-guard strategy deadlock
+设计 H4/H3c 级别的机制补丁或明确放弃该单任务路径。

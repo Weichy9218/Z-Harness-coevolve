@@ -7,7 +7,21 @@
 H2e 已经完成：reward `0.0`，无 infra exception，但 verifier 缺
 `/app/solution.txt`。这不是 H2c/H2d 那种 processor false positive invalid run；
 它是一次有效 gate failure。结论是：H2 的 guard 机制变干净了，但还不足以让
-`crack-7z-hash` 成功。下一步应先做 H3 failure-mechanism patch。
+`crack-7z-hash` 成功。
+
+H3 failure-mechanism patch 已经完成并在 HarnessX 本地提交：
+
+```text
+61977b7 Add TB2 H3 failure-mechanism guards
+```
+
+H3 初次 run 是 invalid diagnostic：oh_runs `task_end` 有 `APIConnectionError`，
+且 BuildInstallLoopGuard 暴露 false positive。该 false positive 已用 regression
+test 修复。
+
+H3b 修复后 real gate 已完成：reward `0.0`，无 infra exception，agent
+`exit_reason=budget_exceeded`，verifier 仍缺 `/app/solution.txt`。H3b 是 clean
+failure with new mechanism，但不是 pass signal，也不足以进入 dev ablation。
 
 ## H0/H1/H2a/H2b/H2c/H2d/H2e 分别是什么
 
@@ -21,13 +35,16 @@ H2e 已经完成：reward `0.0`，无 infra exception，但 verifier 缺
 | H2c | 修复 H2a/H2b 后的 real gate | 判断 H2 是否机制干净，能否进入 dev ablation | invalid，暴露 literal probe false positive |
 | H2d | 修复 H2c 后的 real gate | 判断 H2 是否机制干净，能否进入 dev ablation | invalid，暴露 hash-string false positive |
 | H2e | 修复 H2d 后的 real gate | 判断 H2 是否机制干净，能否进入 dev ablation | completed，reward `0.0` |
+| H3 | failure-mechanism patch 初次 gate | 限制 repeated bounded probe/build loop/final output missing | invalid completed，暴露 BuildInstallLoopGuard false positive + APIConnectionError |
+| H3b | H3 false-positive 修复后 gate | 判断 H3 是否能让 `crack-7z-hash` 形成 pass 或 clean failure | completed，reward `0.0`，clean budget failure |
 
 关键解释：
 
 - H0 是有效失败，不是坏事；它给出了 artifact-backed baseline。
-- H1a/H2a/H2b/H2c/H2d 是 invalid diagnostic，不是最终失败。
+- H1a/H2a/H2b/H2c/H2d/H3 是 invalid diagnostic，不是最终失败。
 - H1b 证明 apt recovery 方向有用，但不够。
 - H2e 是有效 gate failure：它可以进入内部结果整理，但不能支持训练或 dev ablation。
+- H3b 是有效 gate failure：H3 processors 干净触发，但仍没有解决任务。
 
 ## H2e 为什么没有成功
 
@@ -80,14 +97,25 @@ bash /Users/weichy/code/HarnessX/benchmarks/terminal_bench_2/scripts/eval_local_
 
 ## H3 建议
 
-H3 的目标不是“提示答案”，而是进一步约束无效工作流：
+H3 的目标不是“提示答案”，而是进一步约束无效工作流。当前已实现：
 
 1. 限制重复 bounded password probe：允许一次小 probe，但多次失败后必须切换策略或停止。
 2. 限制 repeated build/install loop：`john/hashcat` build 或 install 超时后，不能反复换目录重试。
 3. 增强 self-verify：如果最终没有 `/app/solution.txt`，在最后预算前必须写出候选或明确失败。
 4. 给 processor 加 regression tests，确保 H2c/H2d 修过的 false positive 不回归。
 
-H3 single-task gate 成功后，才跑 10-task same-split dev ablation。
+H3b single-task gate 结果：
+
+- reward `0.0`；
+- no infra exception；
+- agent `budget_exceeded` at 100 steps；
+- verifier 缺 `/app/solution.txt`；
+- `FinalOutputSelfVerifyProcessor` 在 step 90 触发；
+- `RepeatedBoundedProbeGuardProcessor` 和 `BuildInstallLoopGuardProcessor` 都有 clean trigger。
+
+所以 H3b 不能进入 10-task same-split dev ablation。下一步应该是 H4/H3c 级别的
+post-guard strategy patch，或者把 `crack-7z-hash` 暂时作为 failure-taxonomy case
+搁置，先选择另一个 gate task 验证 H3 是否有 transfer value。
 
 ## 训练前还需要做什么
 
@@ -103,22 +131,23 @@ H3 single-task gate 成功后，才跑 10-task same-split dev ablation。
 更具体地说，训练前要补完这些内容：
 
 1. 固化 H3 candidate。
-   - 在 HarnessX 中实现 repeated bounded probe guard。
-   - 在 HarnessX 中实现 repeated build/install loop guard。
-   - 强化 final self-verification：预算快结束且没有 `/app/solution.txt` 时必须处理。
-   - 给每个 processor 加 regression tests，尤其保护 H2c/H2d 修过的 false positive。
+   - 已在 HarnessX commit `61977b7` 实现 repeated bounded probe guard。
+   - 已实现 repeated build/install loop guard，并修复已 blocked tool call 被误计的 false positive。
+   - 已强化 final self-verification：预算快结束且没有 `/app/solution.txt` 时触发 hard reminder。
+   - HarnessX targeted tests 当前 `32 passed`。
 
 2. 跑 H3 single-task gate。
-   - 任务仍用 `terminal-bench/crack-7z-hash`。
-   - 固定 `M0=deepseek-v3.2`、API base、sandbox、max steps、request timeout。
-   - 成功标准优先是 reward `1.0`；如果 reward `0.0`，必须证明 failure mechanism
-     已经和 H0/H2e 明显不同且有扩跑价值。
+   - 已跑 H3 初次 gate：invalid diagnostic。
+   - 已跑 H3b 修复后 gate：completed，reward `0.0`，clean failure。
+   - H3b failure mechanism 和 H0/H2e 不同，但仍是 100-step budget exhaustion，
+     扩跑价值不足，不建议直接 dev ablation。
 
 3. 跑 10-task same-split dev ablation。
    - H0/M0：baseline harness。
    - H*/M0：candidate harness。
    - 同一 dev split、同一模型路由、同一 budget。
    - 至少要看到 H*/M0 多 1 个 pass，且没有不可解释的 H0 pass -> H* fail。
+   - 当前状态：不要跑。H3b 没有 single-task pass，也没有足够的 cost/behavior 改善信号。
 
 4. 冻结 H*。
    - 记录 HarnessX commit 或完整 patch diff。
@@ -183,5 +212,5 @@ H3 single-task gate 成功后，才跑 10-task same-split dev ablation。
 
 1. 不训练；
 2. 回到 failure taxonomy；
-3. 判断是 H2 policy 无效、task cluster 太窄、还是 runtime/env 问题；
-4. 设计 H3 或回滚到 H1b/H0。
+3. 判断是 H3 policy 无效、task cluster 太窄、还是 runtime/env 问题；
+4. 设计 H4/H3c，或回滚到 H1b/H2e/H0 作为对照。

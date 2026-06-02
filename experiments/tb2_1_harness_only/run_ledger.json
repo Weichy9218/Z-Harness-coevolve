@@ -173,6 +173,54 @@
         "repeated_probe_and_build_loop"
       ],
       "notes": "Clean completed gate with no infra exception. Verifier failed because /app/solution.txt was missing; H2 processors intervened but did not make the task pass."
+    },
+    {
+      "entry_id": "h3_initial_failure_mechanism_crack_gate",
+      "harness_variant": "H3-pre-fix",
+      "split": "dev_tuning",
+      "status": "invalid_completed",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h3-failure-mechanism-crack-gate-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h3-failure-mechanism-crack-gate-20260602",
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h3-failure-mechanism-crack-gate-20260602/crack-7z-hash__iHnqShZ/result.json",
+      "summary_artifact": "artifacts/tb2_1_harness_only/h3_summary.json",
+      "reward": 0.0,
+      "runtime_seconds": 2980.177,
+      "observed_assistant_steps": 36,
+      "observed_bash_tool_calls": 36,
+      "synthetic_tool_blocks": 3,
+      "failure_taxonomy": [
+        "invalid_gate",
+        "api_connection_error_task_end",
+        "build_install_loop_guard_false_positive"
+      ],
+      "notes": "Diagnostic H3 attempt from the pre-fix H3 worktree. Harbor recorded no trial exception, but oh_runs task_end had APIConnectionError and BuildInstallLoopGuard counted a previously blocked apt command as an install failure. Excluded from metrics."
+    },
+    {
+      "entry_id": "h3b_failure_mechanism_crack_gate",
+      "harness_variant": "H3",
+      "split": "dev_tuning",
+      "status": "completed",
+      "accepted_for_training": false,
+      "task_name": "terminal-bench/crack-7z-hash",
+      "job_name": "tb2-1-h3b-failure-mechanism-crack-gate-20260602",
+      "artifact_root": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h3b-failure-mechanism-crack-gate-20260602",
+      "trial_result": "/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h3b-failure-mechanism-crack-gate-20260602/crack-7z-hash__nTdefcg/result.json",
+      "summary_artifact": "artifacts/tb2_1_harness_only/h3b_summary.json",
+      "harnessx_commit": "61977b7",
+      "reward": 0.0,
+      "runtime_seconds": 1773.217,
+      "observed_assistant_steps": 100,
+      "observed_bash_tool_calls": 100,
+      "synthetic_tool_blocks": 12,
+      "failure_taxonomy": [
+        "valid_gate_failure",
+        "budget_exceeded",
+        "missing_solution_file",
+        "guarded_probe_build_loop_persists"
+      ],
+      "notes": "Clean completed H3 gate on HarnessX commit 61977b7. H3 guards fired without the H3-pre-fix false positive, including repeated bounded probe, build/install loop, and final output self-verify. The agent still exhausted 100 steps and verifier failed because /app/solution.txt was missing. Not training data and not enough to start dev ablation."
     }
   ]
 }

@@ -38,8 +38,10 @@ splits/terminal_bench_2_1/harness_heldout_v0.tasks.json
 | H2c | `tb2-1-h2c-tool-cost-crack-gate-20260602` | invalid stopped | n/a | no | `cat` 在成功分支中被误判为 wordlist source，false positive |
 | H2d | `tb2-1-h2d-literal-probe-crack-gate-20260602` | invalid stopped | n/a | no | `$7z$` hash string 被误判为外部 `7z` 命令，false positive |
 | H2e | `tb2-1-h2e-external-command-regex-crack-gate-20260602` | completed | `0.0` | yes, gate failure | no infra exception，但仍没有写 `/app/solution.txt`；H2 clean 但不足 |
+| H3 | `tb2-1-h3-failure-mechanism-crack-gate-20260602` | invalid completed / diagnostic | `0.0` | no | pre-fix H3 run：oh_runs `task_end` 有 `APIConnectionError`，且 BuildInstallLoopGuard 把已 blocked apt command 误计为 install failure |
+| H3b | `tb2-1-h3b-failure-mechanism-crack-gate-20260602` | completed | `0.0` | yes, gate failure | H3 guards 干净触发，但 agent `budget_exceeded`，verifier 仍缺 `/app/solution.txt` |
 
-当前只有 H0 和 H2e 能作为内部 gate/baseline 结果比较。H1a/H1b/H2a/H2b/H2c/H2d
+当前只有 H0、H2e、H3b 能作为内部 gate/baseline 结果比较。H1a/H1b/H2a/H2b/H2c/H2d/H3
 是 harness debugging 证据，只能用于 failure taxonomy 和 regression tests。
 
 ## H0 Baseline Result
@@ -124,6 +126,88 @@ H2e processor triggers：
 | `CompactionProcessor` | `2` |
 | `PostCompactionRefreshProcessor` | `2` |
 
+## H3 Gate 结果
+
+H3 patch 目标仍是通用 harness policy，不提示答案：
+
+- 限制 repeated bounded password probe；
+- 限制 repeated build/install loop；
+- 强化 final self-verification：step budget 接近结束且 task description 要求
+  `/app/solution.txt` 时检查文件是否存在且非空；
+- 保留 H2c/H2d false-positive regression tests。
+
+HarnessX 当前 H3 commit：
+
+```text
+61977b7 Add TB2 H3 failure-mechanism guards
+```
+
+H3 初次 artifact：
+
+```text
+/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h3-failure-mechanism-crack-gate-20260602
+```
+
+H3 初次 run 不作为 metric。虽然 Harbor top-level 是 completed、reward `0.0`、
+`exception_info=null`，但 oh_runs 的 `task_end` 是 `exit_reason=error`，
+`error=APIConnectionError: Connection error.`；同时 BuildInstallLoopGuard 将一个
+已被 AptInstallRecovery blocked 的 synthetic apt command 误计为 install failure。
+这个 false positive 已由 regression test 修复。
+
+H3b artifact：
+
+```text
+/Users/weichy/code/HarnessX/.benchmarks/tb2/tb2-1-h3b-failure-mechanism-crack-gate-20260602
+```
+
+H3b summary：
+
+```text
+artifacts/tb2_1_harness_only/h3b_summary.json
+```
+
+| 字段 | 值 |
+| --- | --- |
+| task | `terminal-bench/crack-7z-hash` |
+| trial | `crack-7z-hash__nTdefcg` |
+| reward | `0.0` |
+| infra exceptions | `0` |
+| agent exit reason | `budget_exceeded` |
+| verifier failure | missing `/app/solution.txt` |
+| runtime | `29m 33s` |
+| observed assistant steps | `100` |
+| observed Bash calls | `100` |
+| job input tokens | `1712622` |
+| raw output tokens from oh_runs | `14773` |
+| synthetic tool blocks | `12` |
+
+H3b processor triggers：
+
+| processor | count |
+| --- | --- |
+| `AptInstallRecoveryProcessor` | `2` |
+| `BuildInstallLoopGuardProcessor` | `5` |
+| `CompactionProcessor` | `3` |
+| `EnvironmentContextInjector` | `1` |
+| `FinalOutputSelfVerifyProcessor` | `1` |
+| `PostCompactionRefreshProcessor` | `3` |
+| `RepeatedBoundedProbeGuardProcessor` | `1` |
+| `SlowBruteforceGuardProcessor` | `8` |
+| `SystemPromptProcessor` | `1` |
+
+H3b 是 clean failure with new mechanism：
+
+- H3 修复后的 BuildInstallLoopGuard 不再误计已 blocked tool call。
+- RepeatedBoundedProbeGuard 在一次 bounded probe 后阻断继续换小列表 probe。
+- FinalOutputSelfVerify 在 step 90 触发，但模型仍没有写出 verified
+  `/app/solution.txt`。
+- 模型后期转向 hashcat 和小规模 mask/wordlist 尝试，但仍没有 recover password，
+  最终耗尽 100 steps。
+
+结论：H3b 不能支持训练，也不足以直接进入 10-task dev ablation。下一步应先分析
+post-guard strategy deadlock，决定是否做 H4/H3c，或者把 `crack-7z-hash` 暂时
+降级为 failure-taxonomy case。
+
 ## 本地代码同步状态
 
 Z repo 已记录并同步当前 TB2 文档、ledger 和 export policy。
@@ -133,9 +217,10 @@ HarnessX 本地有 Terminal-Bench 相关提交：
 ```text
 4143465 Add TB2 harness-only H2 guards
 266e23b Fix TB2 brute-force guard false positives
+61977b7 Add TB2 H3 failure-mechanism guards
 ```
 
-这两个提交目前还没有推到 `Darwin-Agent/HarnessX` 远端，因为当前 GitHub 身份对该
+这些提交目前还没有推到 `Darwin-Agent/HarnessX` 远端，因为当前 GitHub 身份对该
 仓库没有写权限。它们仍然是当前本地 H2e/H3 继续工作的 runnable substrate。无关的
 `recipe/gaia_evolver/data/` 不属于 TB2 主线，本轮忽略。
 
@@ -150,7 +235,7 @@ Z repo：
 HarnessX targeted tests：
 
 ```text
-26 passed
+32 passed
 ```
 
 ## SFT Export 结果
